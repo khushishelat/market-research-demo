@@ -25,7 +25,7 @@
                         <li class="breadcrumb-item active">{{ report.title }}</li>
                     </ol>
                 </nav>
-                <h1 class="display-5 fw-bold text-orange mb-1">{{ report.title }}</h1>
+                <h1 class="display-5 fw-bold text-orange mb-1 gerstner">{{ report.title }}</h1>
                 <p class="text-muted mb-0">
                     <i class="fas fa-calendar me-2"></i>Generated on {{ report.created_at }}
                 </p>
@@ -49,25 +49,25 @@
             <div class="card-body">
                 <div class="row">
                     <div class="col-md-3">
-                        <h6 class="fw-semibold mb-2">
+                        <h6 class="stat-label">
                             <i class="fas fa-industry me-2 text-orange"></i>Industry
                         </h6>
                         <p class="mb-0">{{ report.industry }}</p>
                     </div>
                     <div class="col-md-3">
-                        <h6 class="fw-semibold mb-2">
+                        <h6 class="stat-label">
                             <i class="fas fa-globe me-2 text-orange"></i>Geography
                         </h6>
                         <p class="mb-0">{{ report.geography or 'Global' }}</p>
                     </div>
                     <div class="col-md-3">
-                        <h6 class="fw-semibold mb-2">
+                        <h6 class="stat-label">
                             <i class="fas fa-search me-2 text-orange"></i>Research Focus
                         </h6>
                         <p class="mb-0">{{ report.details or 'General market analysis' }}</p>
                     </div>
                     <div class="col-md-3">
-                        <h6 class="fw-semibold mb-2">
+                        <h6 class="stat-label">
                             <i class="fas fa-user me-2 text-orange"></i>Author
                         </h6>
                         <p class="mb-0">{{ report.author_name or 'Anonymous' }}</p>

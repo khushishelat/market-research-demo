@@ -6,23 +6,23 @@
 <!-- Hero Section -->
 <div class="hero-section">
     <div class="centered-content">
-        <h1 class="hero-title">AI-powered market research built for speed and precision</h1>
+        <h1 class="hero-title gerstner">AI-powered market research built for speed and precision</h1>
         <p class="hero-subtitle">
             Generate comprehensive market analysis with citations, competitive intelligence, and actionable insights. Powered by Parallel's deep research technology.
         </p>
         
         <!-- Research Form -->
-        <div class="centered-content">
+        <div class="content-wrapper">
             <form id="research-form" class="research-form">
                 <!-- Industry and Geography Row -->
                 <div class="row mb-4">
                     <div class="col-md-6">
-                        <label for="industry" class="form-label">Industry *</label>
+                        <label for="industry" class="form-label stat-label">Industry *</label>
                         <input type="text" class="form-control form-control-lg" id="industry" 
                                placeholder="e.g., HVAC, SaaS, Electric Vehicles" required>
                     </div>
                     <div class="col-md-6">
-                        <label for="geography" class="form-label">Geography</label>
+                        <label for="geography" class="form-label stat-label">Geography</label>
                         <select class="form-select form-select-lg" id="geography">
                             <option value="">Select country or region</option>
                             <option value="Global">Global</option>
@@ -44,7 +44,7 @@
 
                 <!-- Research Focus Input -->
                 <div class="mb-4">
-                    <label for="details" class="form-label">Research Focus</label>
+                    <label for="details" class="form-label stat-label">Research Focus</label>
                     <textarea class="form-control" id="details" rows="5" 
                               placeholder="Describe the ideal market research report or any specific details you'd like to include in your report..."></textarea>
                 </div>
@@ -127,7 +127,7 @@
             {% for report in public_reports[:6] %}
             <div class="analysis-card">
                 <!-- Company Logo Placeholder -->
-                <div class="company-logo bg-orange">
+                <div class="company-logo">
                     <i class="fas fa-building"></i>
                 </div>
                 
@@ -314,7 +314,7 @@
         <div class="analyses-grid">
             {% for report in user_reports %}
             <div class="analysis-card">
-                <div class="company-logo bg-orange">
+                <div class="company-logo">
                     <i class="fas fa-file-alt"></i>
                 </div>
                 <div class="company-name">{{ report.title[:30] }}{% if report.title|length > 30 %}...{% endif %}</div>
