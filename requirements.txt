@@ -1,0 +1,7 @@
+Flask==2.3.3
+parallel-web==0.2.0
+python-dotenv==1.0.0
+Werkzeug==2.3.7
+Flask-Login==0.6.3
+Authlib==1.2.1
+requests==2.31.0
