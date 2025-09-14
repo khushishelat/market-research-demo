@@ -54,7 +54,7 @@ if not PARALLEL_API_KEY:
 client = Parallel(api_key=PARALLEL_API_KEY)
 
 # Configuration
-MAX_REPORTS_PER_USER = 5  # Limit reports per authenticated user
+MAX_REPORTS_PER_USER = 10  # Limit reports per authenticated user
 DATABASE_PATH = 'market_research.db'
 
 # In-memory task tracking for background monitoring
@@ -112,6 +112,7 @@ def init_database():
             geography TEXT,
             details TEXT,
             content TEXT NOT NULL,
+            basis TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             status TEXT DEFAULT 'completed',
             is_public INTEGER DEFAULT 1,
@@ -231,17 +232,56 @@ def generate_market_research_input(industry, geography, details):
     
     return research_input
 
-def save_report(title, slug, industry, geography, details, content, user_id=None, author_name=None):
+def convert_basis_to_dict(basis):
+    """Convert FieldBasis objects to dictionaries for JSON serialization"""
+    if not basis:
+        return None
+    
+    result = []
+    for field_basis in basis:
+        # Convert FieldBasis object to dictionary
+        basis_dict = {
+            'field': getattr(field_basis, 'field', ''),
+            'reasoning': getattr(field_basis, 'reasoning', ''),
+            'confidence': getattr(field_basis, 'confidence', None),
+            'citations': []
+        }
+        
+        # Convert citation objects to dictionaries
+        citations = getattr(field_basis, 'citations', [])
+        if citations:
+            for citation in citations:
+                citation_dict = {
+                    'url': getattr(citation, 'url', ''),
+                    'excerpts': getattr(citation, 'excerpts', [])
+                }
+                basis_dict['citations'].append(citation_dict)
+        
+        result.append(basis_dict)
+    
+    return result
+
+def save_report(title, slug, industry, geography, details, content, basis=None, user_id=None, author_name=None, task_run_id=None):
     """Save report to database"""
     conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
     
     report_id = str(uuid.uuid4())
     
+    # Convert basis to JSON string if provided
+    basis_json = None
+    if basis:
+        try:
+            basis_dict = convert_basis_to_dict(basis)
+            basis_json = json.dumps(basis_dict) if basis_dict else None
+        except Exception as e:
+            print(f"Error converting basis to JSON: {e}")
+            basis_json = None
+    
     cursor.execute('''
-        INSERT INTO reports (id, user_id, title, slug, industry, geography, details, content, author_name, is_public)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
-    ''', (report_id, user_id, title, slug, industry, geography, details, content, author_name))
+        INSERT INTO reports (id, user_id, title, slug, industry, geography, details, content, basis, author_name, is_public, task_run_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+    ''', (report_id, user_id, title, slug, industry, geography, details, content, basis_json, author_name, task_run_id))
     
     conn.commit()
     conn.close()
@@ -254,7 +294,7 @@ def get_report_by_slug(slug):
     cursor = conn.cursor()
     
     cursor.execute('''
-        SELECT id, title, industry, geography, details, content, created_at, author_name
+        SELECT id, title, industry, geography, details, content, basis, created_at, author_name, task_run_id
         FROM reports WHERE slug = ? AND is_public = 1
     ''', (slug,))
     
@@ -262,6 +302,14 @@ def get_report_by_slug(slug):
     conn.close()
     
     if result:
+        # Parse basis JSON if it exists
+        basis_data = None
+        if result[6]:  # basis column
+            try:
+                basis_data = json.loads(result[6])
+            except (json.JSONDecodeError, TypeError):
+                basis_data = None
+                
         return {
             'id': result[0],
             'title': result[1],
@@ -269,8 +317,10 @@ def get_report_by_slug(slug):
             'geography': result[3],
             'details': result[4],
             'content': result[5],
-            'created_at': result[6],
-            'author_name': result[7],
+            'basis': basis_data,
+            'created_at': result[7],
+            'author_name': result[8],
+            'task_run_id': result[9],
             'slug': slug
         }
     return None
@@ -642,6 +692,7 @@ def monitor_task_with_sse(task_run_id):
             try:
                 run_result = client.task_run.result(task_run_id)
                 content = getattr(run_result.output, "content", "No content found.")
+                basis = getattr(run_result.output, "basis", None)
                 
                 # Create and save report
                 title = f"{task_metadata['industry']} Market Research Report"
@@ -656,8 +707,10 @@ def monitor_task_with_sse(task_run_id):
                     task_metadata['geography'], 
                     task_metadata['details'],
                     content,
+                    basis,
                     user_id=task_metadata['user_id'],
-                    author_name=task_metadata['author_name']
+                    author_name=task_metadata['author_name'],
+                    task_run_id=task_run_id
                 )
                 
                 increment_user_report_count(task_metadata['user_id'])
@@ -854,6 +907,7 @@ def monitor_task_completion(task_run_id, task_metadata):
             # Save the report (same logic as complete_task endpoint)
             try:
                 content = getattr(run_result.output, "content", "No content found.")
+                basis = getattr(run_result.output, "basis", None)
                 
                 title = f"{task_metadata['industry']} Market Research Report"
                 if task_metadata['geography'] and task_metadata['geography'] != "Not specified":
@@ -867,8 +921,10 @@ def monitor_task_completion(task_run_id, task_metadata):
                     task_metadata['geography'], 
                     task_metadata['details'], 
                     content,
+                    basis,
                     user_id=task_metadata['user_id'], 
-                    author_name=task_metadata['author_name']
+                    author_name=task_metadata['author_name'],
+                    task_run_id=task_run_id
                 )
                 
                 increment_user_report_count(task_metadata['user_id'])
@@ -907,6 +963,7 @@ def complete_task(task_run_id):
         
         # Extract content
         content = getattr(run_result.output, "content", "No content found.")
+        basis = getattr(run_result.output, "basis", None)
         
         # Create title and slug
         title = f"{task_metadata['industry']} Market Research Report"
@@ -922,8 +979,10 @@ def complete_task(task_run_id):
             task_metadata['geography'], 
             task_metadata['details'], 
             content,
+            basis,
             user_id=task_metadata['user_id'], 
-            author_name=task_metadata['author_name']
+            author_name=task_metadata['author_name'],
+            task_run_id=task_run_id
         )
         
         # Increment user report count

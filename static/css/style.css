@@ -23,6 +23,13 @@
     font-display: swap;
 }
 
+@font-face {
+    font-family: 'Gerstner Programm';
+    src: url('https://assets.p0web.com/Gerstner-ProgrammMedium.woff2') format('woff2');
+    font-weight: 500;
+    font-display: swap;
+}
+
 :root {
     --off-white: #fcfcfa;      /* Primary background */
     --index-black: #1d1b16;    /* Primary text */
@@ -56,16 +63,31 @@
 
 /* Global Styles */
 body {
-    font-family: 'FT System Mono', monospace;
+    font-family: 'Gerstner Programm', serif;
+    font-weight: 500;
     background-color: var(--off-white);
     color: var(--index-black);
-    line-height: 1.5;
-    font-size: 14px; /* Small, clean text */
+    line-height: 1.6;
+    font-size: 15px;
 }
 
+/* Typography classes */
 .gerstner {
     font-family: 'Gerstner Programm', serif;
     line-height: 1.2;
+}
+
+.mono {
+    font-family: 'FT System Mono', monospace;
+    line-height: 1.4;
+}
+
+/* Onboarding and card titles use monospace */
+.hero-title,
+.section-title,
+.card-title,
+.navbar-brand {
+    font-family: 'FT System Mono', monospace;
 }
 
 .container {
@@ -87,21 +109,24 @@ body {
 
 /* Typography */
 .hero-title {
-    font-family: 'Gerstner Programm', serif;
-    font-size: 2.5rem;
-    font-weight: 400;
+    font-family: 'FT System Mono', monospace;
+    font-size: 2rem;
+    font-weight: 500;
     color: var(--index-black);
     text-align: center;
     margin-bottom: 1rem;
     line-height: 1.2;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
 .hero-subtitle {
-    font-size: 1.1rem;
+    font-size: 1rem;
     color: var(--gray-text);
     text-align: center;
     margin-bottom: 3rem;
     font-weight: 400;
+    line-height: 1.5;
 }
 
 /* Section spacing */
@@ -110,26 +135,32 @@ body {
 }
 
 .section-title {
-    margin-bottom: 32px;
-    padding-bottom: 12px;
-    border-bottom: 2px solid var(--light-border);
-    font-size: 24px;
+    margin-bottom: 24px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--light-border);
+    font-size: 18px;
     font-weight: 500;
-    font-family: 'Gerstner Programm', serif;
+    font-family: 'FT System Mono', monospace;
     color: var(--index-black);
     text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
 .display-4 {
-    font-family: 'Gerstner Programm', serif;
-    font-weight: 400;
-    letter-spacing: -0.02em;
+    font-family: 'FT System Mono', monospace;
+    font-weight: 500;
+    font-size: 1.8rem;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
 }
 
 .display-5 {
-    font-family: 'Gerstner Programm', serif;
-    font-weight: 400;
-    letter-spacing: -0.01em;
+    font-family: 'FT System Mono', monospace;
+    font-weight: 500;
+    font-size: 1.5rem;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
 }
 
 .lead {
@@ -140,17 +171,18 @@ body {
 /* Typography Utilities */
 /* Label styling - consistent throughout */
 .stat-label {
-    font-size: 11px;
+    font-size: 10px;
     text-transform: uppercase;
     color: var(--gray-text);
     font-weight: 600;
     letter-spacing: 0.5px;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
+    font-family: 'FT System Mono', monospace;
 }
 
 /* Value styling */
 .stat-value {
-    font-size: 16px;
+    font-size: 14px;
     font-weight: 500;
     color: var(--index-black);
 }
@@ -261,38 +293,44 @@ body {
 }
 
 .company-name {
-    font-size: 1.1rem;
-    font-weight: 600;
-    color: var(--text-primary);
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--index-black);
     margin-bottom: 0.5rem;
+    font-family: 'FT System Mono', monospace;
 }
 
 .company-domain {
-    font-size: 0.9rem;
-    color: var(--text-secondary);
+    font-size: 12px;
+    color: var(--gray-text);
     margin-bottom: 1rem;
+    font-family: 'FT System Mono', monospace;
 }
 
 .company-description {
-    font-size: 0.9rem;
-    color: var(--text-primary);
+    font-size: 13px;
+    color: var(--index-black);
     line-height: 1.5;
     margin-bottom: 1rem;
 }
 
 .company-category {
-    font-size: 0.8rem;
-    color: var(--text-secondary);
+    font-size: 11px;
+    color: var(--gray-text);
     margin-bottom: 0.5rem;
+    font-family: 'FT System Mono', monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
 .view-count {
-    font-size: 0.8rem;
-    color: var(--primary-color);
-    font-weight: 500;
+    font-size: 11px;
+    color: var(--gray-text);
+    font-weight: 400;
     display: flex;
     align-items: center;
     gap: 0.25rem;
+    font-family: 'FT System Mono', monospace;
 }
 
 /* Interactive Elements */
@@ -446,11 +484,10 @@ body {
     font-weight: 600;
     color: var(--index-black);
     margin-bottom: 0.8rem;
-    font-size: 1rem;
     font-family: 'FT System Mono', monospace;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    font-size: 11px;
+    font-size: 10px;
 }
 
 .form-text {
@@ -733,7 +770,11 @@ footer {
     }
     
     body {
-        font-size: 13px;        /* Slightly smaller on mobile */
+        font-size: 14px;
+    }
+    
+    .markdown-content {
+        font-size: 13px;
     }
     
     .company-header {
@@ -747,8 +788,12 @@ footer {
     }
     
     .section-title {
-        font-size: 20px;
-        margin-bottom: 24px;
+        font-size: 16px;
+        margin-bottom: 20px;
+    }
+    
+    .hero-title {
+        font-size: 1.5rem;
     }
     
     .display-4 {
@@ -922,23 +967,19 @@ footer {
 .toc-sidebar {
     position: sticky;
     top: 20px;
-    background: var(--card-background);
-    border: 1px solid var(--border-color);
-    border-radius: 12px;
-    padding: 1.5rem;
-    box-shadow: var(--shadow-light);
+    background: transparent;
+    border: none;
+    padding: 0;
     max-height: calc(100vh - 40px);
     overflow-y: auto;
 }
 
 .toc-header {
-    border-bottom: 1px solid var(--border-color);
-    padding-bottom: 1rem;
     margin-bottom: 1rem;
 }
 
-.toc-header h5 {
-    color: var(--primary-color);
+.toc-header h6 {
+    color: var(--gray-text);
     font-weight: 600;
     margin: 0;
 }
@@ -960,148 +1001,153 @@ footer {
 
 .toc-link {
     display: block;
-    padding: 0.5rem 0.75rem;
-    color: var(--text-primary);
+    padding: 0.25rem 0;
+    color: var(--gray-text);
     text-decoration: none;
-    border-radius: 8px;
-    font-size: 0.9rem;
+    font-size: 12px;
     transition: all 0.2s ease;
-    border-left: 3px solid transparent;
+    border-left: 2px solid transparent;
+    padding-left: 8px;
+    line-height: 1.4;
 }
 
 .toc-link:hover {
-    background-color: var(--primary-light);
-    color: var(--primary-color);
-    border-left-color: var(--primary-color);
+    color: var(--index-black);
+    border-left-color: var(--light-border);
 }
 
 .toc-link.active {
-    background-color: var(--primary-color);
-    color: white;
-    border-left-color: var(--primary-hover);
+    color: var(--index-black);
+    border-left-color: var(--signal);
     font-weight: 500;
 }
 
 /* Main title styling in TOC */
 .toc-main-title {
-    margin-bottom: 1rem;
-    border-bottom: 1px solid var(--border-color);
-    padding-bottom: 0.5rem;
+    margin-bottom: 0.5rem;
 }
 
 .toc-link-main {
-    font-weight: 600;
-    font-size: 1rem;
-    color: var(--primary-color);
+    font-weight: 500;
+    font-size: 13px;
+    color: var(--index-black);
 }
 
 .toc-link-main:hover {
-    background-color: var(--primary-light);
-    color: var(--primary-hover);
+    color: var(--index-black);
 }
 
 .toc-link-main.active {
-    background-color: var(--primary-color);
-    color: white;
-    font-weight: 600;
+    color: var(--index-black);
+    font-weight: 500;
+    border-left-color: var(--signal);
 }
 
 /* Section heading styling in TOC */
 .toc-section {
-    margin-bottom: 0.25rem;
+    margin-bottom: 0.125rem;
 }
 
 .toc-link-section {
-    font-size: 0.9rem;
+    font-size: 11px;
     margin-left: 0.5rem;
-    color: var(--text-secondary);
+    color: var(--gray-text);
 }
 
 .toc-link-section:hover {
-    background-color: var(--primary-light);
-    color: var(--primary-color);
+    color: var(--index-black);
 }
 
 .toc-link-section.active {
-    background-color: var(--primary-color);
-    color: white;
+    color: var(--index-black);
     font-weight: 500;
+    border-left-color: var(--signal);
 }
 
 /* Enhanced Table Styling */
 .table-responsive {
-    border-radius: 8px;
+    border-radius: 4px;
     overflow: hidden;
-    box-shadow: var(--shadow-light);
+    border: 1px solid var(--light-border);
 }
 
 .table {
     margin-bottom: 0;
     background-color: var(--card-background);
+    font-size: 13px;
 }
 
 .table thead th {
-    background-color: var(--primary-color) !important;
-    color: white;
+    background-color: var(--gray-bg) !important;
+    color: var(--index-black);
     font-weight: 600;
     border: none;
-    padding: 1rem;
-    font-size: 0.9rem;
+    padding: 0.75rem;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-family: 'FT System Mono', monospace;
 }
 
 .table tbody td {
-    padding: 0.875rem 1rem;
+    padding: 0.75rem;
     vertical-align: middle;
-    border-color: var(--border-color);
-    color: var(--text-primary);
+    border-color: var(--light-border);
+    color: var(--index-black);
 }
 
 .table-striped tbody tr:nth-of-type(odd) {
-    background-color: rgba(255, 99, 53, 0.05);
+    background-color: var(--gray-bg);
 }
 
 .table-hover tbody tr:hover {
-    background-color: rgba(255, 99, 53, 0.1);
+    background-color: var(--light-border);
 }
 
 /* Citation Styling */
 .citation-link {
     display: inline-block;
-    background-color: #6c757d;
-    color: white !important;
-    padding: 0.15rem 0.35rem;
-    border-radius: 3px;
-    font-size: 0.75rem;
+    background-color: var(--light-border);
+    color: var(--index-black) !important;
+    padding: 0.1rem 0.25rem;
+    border-radius: 2px;
+    font-size: 10px;
     font-weight: 500;
     text-decoration: none;
     margin: 0 0.1rem;
     cursor: pointer;
-    border: 1px solid #6c757d;
+    border: 1px solid var(--light-border);
+    font-family: 'FT System Mono', monospace;
 }
 
 .citation-link:hover {
-    background-color: var(--primary-color);
-    border-color: var(--primary-color);
+    background-color: var(--signal);
+    border-color: var(--signal);
+    color: white !important;
 }
 
 .citation-item {
-    padding: 0.75rem;
+    padding: 0.5rem;
     margin-bottom: 0.5rem;
-    background-color: var(--primary-light);
-    border-left: 4px solid var(--primary-color);
-    border-radius: 0 8px 8px 0;
+    background-color: transparent;
+    border-left: 2px solid var(--light-border);
+    font-size: 12px;
+    line-height: 1.5;
 }
 
 .citation-item:target,
 .citation-item.highlight-citation {
-    background-color: rgba(255, 99, 53, 0.15);
+    border-left-color: var(--signal);
+    background-color: rgba(251, 99, 27, 0.05);
 }
 
 /* Enhanced Markdown Content Styling */
 .markdown-content {
-    font-size: 1.05rem;
-    line-height: 1.8;
-    color: var(--text-primary);
+    font-size: 14px;
+    line-height: 1.7;
+    color: var(--index-black);
+    font-family: 'Gerstner Programm', serif;
+    font-weight: 500;
 }
 
 .markdown-content .report-heading {
@@ -1109,62 +1155,63 @@ footer {
 }
 
 .markdown-content h1.report-heading {
-    color: var(--primary-color);
-    font-weight: 700;
-    font-size: 2.5rem;
-    margin: 2rem 0 1.5rem 0;
-    padding-bottom: 0.75rem;
-    border-bottom: 3px solid var(--primary-color);
+    color: var(--index-black);
+    font-weight: 500;
+    font-size: 1.5rem;
+    margin: 2rem 0 1rem 0;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--light-border);
+    font-family: 'Gerstner Programm', serif;
 }
 
 .markdown-content h2.report-heading {
-    color: var(--primary-color);
-    font-weight: 600;
-    font-size: 2rem;
-    margin: 2.5rem 0 1.25rem 0;
-    padding-bottom: 0.5rem;
-    border-bottom: 2px solid var(--primary-color);
+    color: var(--index-black);
+    font-weight: 500;
+    font-size: 1.25rem;
+    margin: 1.5rem 0 0.75rem 0;
+    font-family: 'Gerstner Programm', serif;
 }
 
 .markdown-content h3.report-heading {
-    color: #495057;
-    font-weight: 600;
-    font-size: 1.5rem;
-    margin: 2rem 0 1rem 0;
+    color: var(--index-black);
+    font-weight: 500;
+    font-size: 1.1rem;
+    margin: 1.25rem 0 0.5rem 0;
+    font-family: 'Gerstner Programm', serif;
 }
 
 .markdown-content h4.report-heading {
-    color: #6c757d;
-    font-weight: 600;
-    font-size: 1.25rem;
-    margin: 1.5rem 0 0.75rem 0;
+    color: var(--gray-text);
+    font-weight: 500;
+    font-size: 1rem;
+    margin: 1rem 0 0.5rem 0;
+    font-family: 'Gerstner Programm', serif;
 }
 
 .markdown-content p {
-    margin-bottom: 1.2rem;
-    text-align: justify;
+    margin-bottom: 1rem;
+    text-align: left;
+    max-width: 65ch;
 }
 
 .markdown-content ul,
 .markdown-content ol {
-    margin-bottom: 1.5rem;
-    padding-left: 2rem;
+    margin-bottom: 1rem;
+    padding-left: 1.5rem;
 }
 
 .markdown-content li {
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.25rem;
     line-height: 1.6;
 }
 
 .markdown-content blockquote {
-    border-left: 4px solid var(--primary-color);
-    padding-left: 1.5rem;
-    margin: 1.5rem 0;
+    border-left: 2px solid var(--light-border);
+    padding-left: 1rem;
+    margin: 1rem 0;
     font-style: italic;
-    color: #6c757d;
-    background-color: var(--primary-light);
-    padding: 1rem 1rem 1rem 1.5rem;
-    border-radius: 0 8px 8px 0;
+    color: var(--gray-text);
+    background: transparent;
 }
 
 .markdown-content code {

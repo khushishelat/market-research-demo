@@ -103,7 +103,7 @@
             </p>
             <div class="progress mx-auto" style="width: 200px; height: 8px;">
                 <div class="progress-bar" role="progressbar" 
-                     style="width: {{ (report_count / max_reports * 100) }}%"></div>
+                     style="width: {{ ((report_count or 0) / (max_reports or 1) * 100) if max_reports else 0 }}%"></div>
             </div>
             <small class="text-muted">{{ max_reports - report_count }} remaining</small>
         </div>

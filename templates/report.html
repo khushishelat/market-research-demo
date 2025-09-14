@@ -25,53 +25,40 @@
                         <li class="breadcrumb-item active">{{ report.title }}</li>
                     </ol>
                 </nav>
-                <h1 class="display-5 fw-bold text-orange mb-1 gerstner">{{ report.title }}</h1>
-                <p class="text-muted mb-0">
-                    <i class="fas fa-calendar me-2"></i>Generated on {{ report.created_at }}
+                <h1 class="display-5 mb-2 mono">{{ report.title }}</h1>
+                <p class="text-muted mb-0 small">
+                    Generated {{ report.created_at }}
                 </p>
             </div>
-            <div class="btn-group" role="group">
+            <div class="d-flex gap-2">
                 <a href="{{ url_for('download_report', slug=report.slug) }}" 
-                   class="btn btn-outline-primary">
-                    <i class="fas fa-download me-2"></i>Download Markdown
+                   class="btn btn-outline-primary btn-sm">
+                    <i class="fas fa-download me-1"></i>Download
                 </a>
-                <button class="btn btn-outline-secondary" onclick="window.print()">
-                    <i class="fas fa-print me-2"></i>Print
-                </button>
-                <button class="btn btn-outline-info" onclick="copyReportUrl()">
-                    <i class="fas fa-share me-2"></i>Share
+                <button class="btn btn-outline-secondary btn-sm" onclick="copyReportUrl()">
+                    <i class="fas fa-share me-1"></i>Share
                 </button>
             </div>
         </div>
 
         <!-- Report Metadata -->
-        <div class="card border-0 bg-light mb-4">
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-3">
-                        <h6 class="stat-label">
-                            <i class="fas fa-industry me-2 text-orange"></i>Industry
-                        </h6>
-                        <p class="mb-0">{{ report.industry }}</p>
-                    </div>
-                    <div class="col-md-3">
-                        <h6 class="stat-label">
-                            <i class="fas fa-globe me-2 text-orange"></i>Geography
-                        </h6>
-                        <p class="mb-0">{{ report.geography or 'Global' }}</p>
-                    </div>
-                    <div class="col-md-3">
-                        <h6 class="stat-label">
-                            <i class="fas fa-search me-2 text-orange"></i>Research Focus
-                        </h6>
-                        <p class="mb-0">{{ report.details or 'General market analysis' }}</p>
-                    </div>
-                    <div class="col-md-3">
-                        <h6 class="stat-label">
-                            <i class="fas fa-user me-2 text-orange"></i>Author
-                        </h6>
-                        <p class="mb-0">{{ report.author_name or 'Anonymous' }}</p>
-                    </div>
+        <div class="mb-4 py-3 border-bottom" style="border-color: var(--light-border) !important;">
+            <div class="row g-4">
+                <div class="col-md-3">
+                    <div class="stat-label">Industry</div>
+                    <div class="stat-value">{{ report.industry }}</div>
+                </div>
+                <div class="col-md-3">
+                    <div class="stat-label">Geography</div>
+                    <div class="stat-value">{{ report.geography or 'Global' }}</div>
+                </div>
+                <div class="col-md-3">
+                    <div class="stat-label">Research Focus</div>
+                    <div class="stat-value">{{ report.details or 'General' }}</div>
+                </div>
+                <div class="col-md-3">
+                    <div class="stat-label">Author</div>
+                    <div class="stat-value">{{ report.author_name or 'Anonymous' }}</div>
                 </div>
             </div>
         </div>
@@ -82,7 +69,7 @@
             <div class="col-lg-3">
                 <div class="toc-sidebar" id="table-of-contents">
                     <div class="toc-header">
-                        <h5><i class="fas fa-list me-2"></i>Table of Contents</h5>
+                        <h6 class="stat-label mb-3">Contents</h6>
                     </div>
                     <nav class="toc-nav" id="toc-nav">
                         <!-- TOC items will be generated automatically -->
@@ -92,41 +79,39 @@
             
             <!-- Main Report Content -->
             <div class="col-lg-9">
-                <div class="card shadow-sm">
-                    <div class="card-header bg-white border-bottom">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <h4 class="card-title mb-0">
-                                <i class="fas fa-file-alt me-2 text-orange"></i>Market Research Report
-                            </h4>
-                            <span class="badge bg-orange">
-                                <i class="fas fa-robot me-1"></i>AI Generated
-                            </span>
-                        </div>
-                    </div>
-                    <div class="card-body">
-                        <div id="report-content" class="markdown-content">
-                            {{ report.content | safe }}
-                        </div>
+                <div class="border-0">
+                    <div id="report-content" class="markdown-content">
+                        {{ report.content | safe }}
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Report Footer -->
-        <div class="card border-0 bg-light mt-4">
-            <div class="card-body text-center">
-                <p class="mb-2">
-                    <i class="fas fa-robot me-2 text-orange"></i>
-                    <strong>Generated by AI-powered Deep Research Technology</strong>
-                </p>
-                <small class="text-muted">
-                    This report was generated using Parallel's deep research capabilities with comprehensive web analysis and citation tracking.
-                </small>
-                <div class="mt-3">
-                    <a href="{{ url_for('index') }}" class="btn btn-primary">
-                        <i class="fas fa-plus me-2"></i>Generate Another Report
-                    </a>
+        <!-- Citation Details Panel -->
+        <div id="citation-panel" class="citation-panel">
+            <div class="citation-panel-header">
+                <h6 class="mb-0">Source Details</h6>
+                <button type="button" class="btn-close" id="close-citation-panel" aria-label="Close"></button>
+            </div>
+            <div class="citation-panel-body">
+                <div id="citation-content">
+                    <p class="text-muted">Click on a citation to view source details</p>
                 </div>
+            </div>
+        </div>
+
+        <!-- Citation Panel Backdrop -->
+        <div id="citation-backdrop" class="citation-backdrop"></div>
+
+        <!-- Report Footer -->
+        <div class="mt-5 pt-4 border-top text-center" style="border-color: var(--light-border) !important;">
+            <small class="text-muted mono">
+                Generated using AI-powered research technology
+            </small>
+            <div class="mt-3">
+                <a href="{{ url_for('index') }}" class="btn btn-outline-primary btn-sm">
+                    Generate Another Report
+                </a>
             </div>
         </div>
     </div>
@@ -160,7 +145,24 @@
 {% block extra_js %}
 <!-- Include marked.js for better markdown parsing -->
 <script src="https://cdn.jsdelivr.net/npm/marked@5.1.1/marked.min.js"></script>
+
+<!-- Pass basis data to JavaScript -->
+<script type="application/json" id="report-basis-data">
+{% if report.basis %}{{ report.basis | tojson | safe }}{% else %}[]{% endif %}
+</script>
+
 <script>
+// Parse basis data from JSON script tag
+window.reportBasis = JSON.parse(document.getElementById('report-basis-data').textContent || '[]');
+console.log('Loaded basis data:', window.reportBasis);
+console.log('Number of basis entries:', window.reportBasis.length);
+if (window.reportBasis.length > 0) {
+    console.log('First basis entry:', window.reportBasis[0]);
+    if (window.reportBasis[0].citations && window.reportBasis[0].citations.length > 0) {
+        console.log('First citation URL:', window.reportBasis[0].citations[0].url);
+    }
+}
+
 // Enhanced markdown formatting with table of contents generation
 document.addEventListener('DOMContentLoaded', function() {
     const content = document.getElementById('report-content');
@@ -213,16 +215,80 @@ document.addEventListener('DOMContentLoaded', function() {
         // Parse markdown content
         let html = marked.parse(markdownText);
         
+        // The content should contain references that we'll process with regex patterns below
+        
         // Handle citations - convert [1], [2], etc. to clickable links
         html = html.replace(/\[(\d+)\]/g, function(match, num) {
+            console.log(`Converting citation [${num}] to clickable link`);
             return `<a href="#citation-${num}" class="citation-link" data-citation="${num}">[${num}]</a>`;
         });
         
+        console.log('Citation links created in HTML');
+        
         // Process references section to add citation anchors
-        // Look for references patterns more flexibly
-        html = html.replace(/(\n|^)(\d+)\.\s+(.+?)(?=\n\d+\.|\n\n|\n$|$)/gm, function(match, prefix, num, text) {
+        // Look for references patterns more flexibly - try multiple patterns
+        
+        let referencesFound = 0;
+        
+        // Pattern 1: Standard numbered references like "1. Title. URL"
+        html = html.replace(/(\n|^|\<p\>)(\d+)\.\s+(.+?)(?=\n\d+\.|\<\/p\>|\n\n|\n$|$)/gm, function(match, prefix, num, text) {
+            console.log(`Pattern 1 - Creating reference anchor for citation ${num}:`, text.substring(0, 100));
+            referencesFound++;
             return `${prefix}<div id="citation-${num}" class="citation-item"><strong>[${num}]</strong> ${text.trim()}</div>`;
         });
+        
+        // Pattern 2: References with markdown links like "1. [Title](URL)"
+        html = html.replace(/(\n|^|\<p\>)(\d+)\.\s*\[([^\]]+)\]\(([^)]+)\)(.*?)(?=\n\d+\.|\<\/p\>|\n\n|\n$|$)/gm, function(match, prefix, num, title, url, rest) {
+            console.log(`Pattern 2 - Creating reference anchor for citation ${num}:`, title);
+            referencesFound++;
+            return `${prefix}<div id="citation-${num}" class="citation-item"><strong>[${num}]</strong> <a href="${url}" target="_blank">${title}</a>${rest}</div>`;
+        });
+        
+        // Pattern 3: Look for References section and numbered items within it
+        const referencesSection = html.match(/(References|REFERENCES|Sources|SOURCES)([\s\S]*?)(?=<\/div>|<div|<h\d|$)/i);
+        if (referencesSection && referencesFound === 0) {
+            const refContent = referencesSection[2];
+            console.log('Found references section content:', refContent.substring(0, 500));
+            
+            // Try multiple patterns for numbered references
+            let numberedRefs = refContent.match(/(\d+)\.\s*([^\n<]+(?:\n(?!\d+\.)[^\n<]*)*)/gm);
+            
+            // Alternative pattern for HTML formatted references
+            if (!numberedRefs) {
+                numberedRefs = refContent.match(/<p[^>]*>(\d+)\.\s*(.*?)<\/p>/gm);
+            }
+            
+            // Alternative pattern for line-break separated references
+            if (!numberedRefs) {
+                const lines = refContent.split(/\n|<br\s*\/?>/);
+                numberedRefs = lines.filter(line => /^\d+\./.test(line.trim()));
+            }
+            
+            console.log('Found numbered references:', numberedRefs);
+            
+            if (numberedRefs && numberedRefs.length > 0) {
+                numberedRefs.forEach(ref => {
+                    const match = ref.match(/(\d+)\.\s*(.*?)(<\/p>|$)/s);
+                    if (match) {
+                        const num = match[1];
+                        let text = match[2].trim();
+                        // Remove HTML tags from text
+                        text = text.replace(/<[^>]*>/g, '');
+                        console.log(`Pattern 3 - Creating reference anchor for citation ${num}:`, text.substring(0, 100));
+                        
+                        // Replace in the HTML - be more careful about replacement
+                        const anchorDiv = `<div id="citation-${num}" class="citation-item"><strong>[${num}]</strong> ${text}</div>`;
+                        
+                        // Find and replace the original reference in the HTML
+                        const originalRef = ref.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // Escape regex chars
+                        html = html.replace(new RegExp(originalRef, 'g'), anchorDiv);
+                        referencesFound++;
+                    }
+                });
+            }
+        }
+        
+        console.log(`Total references found and converted: ${referencesFound}`);
         
         // Also handle references in a "References" section
         html = html.replace(/(references|sources|bibliography)/i, function(match) {
@@ -231,6 +297,52 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Set the processed HTML
         content.innerHTML = html;
+        
+        // Debug: Show actual References section content after processing
+        setTimeout(() => {
+            console.log('Starting post-processing reference check...');
+            console.log('Current referencesFound:', referencesFound);
+            console.log('Current citation items:', document.querySelectorAll('.citation-item').length);
+            
+            // Look for References heading and everything after it
+            const headings = document.querySelectorAll('h1, h2, h3, h4, h5, h6');
+            console.log('Found headings:', Array.from(headings).map(h => h.textContent));
+            
+            let referencesHeading = null;
+            
+            for (const heading of headings) {
+                console.log('Checking heading:', heading.textContent);
+                if (heading.textContent.toLowerCase().includes('reference')) {
+                    referencesHeading = heading;
+                    console.log('✅ Found References heading:', heading.textContent);
+                    break;
+                }
+            }
+            
+            if (referencesHeading) {
+                // Always try to manually process, regardless of referencesFound
+                console.log('Manually processing references under heading...');
+                manuallyProcessReferencesUnderHeading(referencesHeading);
+                
+                // Update count after manual processing
+                setTimeout(() => {
+                    const newCount = document.querySelectorAll('.citation-item').length;
+                    console.log('After manual processing, citation items:', newCount);
+                }, 50);
+            } else {
+                console.log('❌ No References heading found in DOM');
+            }
+        }, 100);
+        
+        // FALLBACK: If still no references found, create them from basis data as numbered list
+        if (referencesFound === 0 && window.reportBasis && window.reportBasis.length > 0) {
+            console.log('No references found in content, creating numbered references from basis...');
+            createNumberedReferencesFromBasis();
+        }
+        
+        console.log('HTML processed and set. Looking for citation elements...');
+        console.log('Citation links after processing:', document.querySelectorAll('.citation-link').length);
+        console.log('Citation items after processing:', document.querySelectorAll('.citation-item').length);
         
         // Generate table of contents
         generateTableOfContents();
@@ -282,17 +394,99 @@ function generateTableOfContents() {
 }
 
 function initializeCitationHandlers() {
-    document.querySelectorAll('.citation-link').forEach(link => {
+    const citationLinks = document.querySelectorAll('.citation-link');
+    console.log('Found citation links:', citationLinks.length);
+    
+    citationLinks.forEach((link, index) => {
+        console.log(`Citation link ${index}:`, link);
         link.addEventListener('click', function(e) {
             e.preventDefault();
+            console.log('Citation link clicked!', e.target);
+            
             const citationId = this.getAttribute('data-citation');
+            console.log('Citation ID:', citationId);
+            
             const target = document.getElementById(`citation-${citationId}`);
+            console.log('Target element:', target);
             
             if (target) {
-                // Simple scroll to target
-                target.scrollIntoView({ block: 'center' });
+                // Extract URL from reference text at bottom of report
+                const referenceText = target.textContent || target.innerText;
+                console.log('Reference text:', referenceText);
+                
+                // Try multiple URL extraction patterns
+                // First try: capture URL until we hit a pattern that looks like next reference title
+                let urlMatch = referenceText.match(/https?:\/\/[^\s\])\>]+?(?=[A-Z][a-z]+|$)/);
+                
+                if (!urlMatch) {
+                    // Fallback: capture URL until whitespace or obvious delimiters
+                    urlMatch = referenceText.match(/https?:\/\/[^\s\])\>]+/);
+                }
+                
+                if (!urlMatch) {
+                    // Try looking for URLs in links within the reference
+                    const linkInReference = target.querySelector('a[href^="http"]');
+                    if (linkInReference) {
+                        urlMatch = [linkInReference.href];
+                    }
+                }
+                
+                console.log('URL match:', urlMatch);
+                
+                if (urlMatch && urlMatch[0]) {
+                    let url = urlMatch[0];
+                    
+                    console.log('Original URL from match:', url);
+                    
+                    // Only clean if there's clear evidence of contamination at the END of the URL
+                    // Pattern 1: URL ending with number then capital letters (like "2025BCG")
+                    if (/\d+[A-Z]{2,}$/.test(url)) {
+                        url = url.replace(/([0-9])([A-Z]{2,})$/, '$1');
+                        console.log('Cleaned trailing caps after number:', url);
+                    }
+                    
+                    // Pattern 2: URL ending with lowercase then capital word (like "liabilityManaging")
+                    if (/[a-z][A-Z][a-z]+$/.test(url)) {
+                        url = url.replace(/([a-z])([A-Z][a-z]+)$/, '$1');
+                        console.log('Cleaned trailing camelCase word:', url);
+                    }
+                    
+                    console.log('Final cleaned URL from reference:', url);
+                    showCitationDetails(citationId, url);
+                } else {
+                    console.log('No URL found in reference text, falling back to scroll');
+                    // Fallback to simple scroll
+                    target.scrollIntoView({ block: 'center' });
+                }
+            } else {
+                console.log('No target element found for citation', citationId);
+                // The reference doesn't exist in the content, let's try to find it in the raw content
+                tryFindReferenceInRawContent(citationId);
             }
         });
+    });
+    
+    console.log('Citation handlers initialized');
+    
+    // Initialize citation panel close handlers
+    const closeBtn = document.getElementById('close-citation-panel');
+    const backdrop = document.getElementById('citation-backdrop');
+    
+    if (closeBtn) {
+        closeBtn.addEventListener('click', closeCitationPanel);
+        console.log('Close button handler added');
+    }
+    
+    if (backdrop) {
+        backdrop.addEventListener('click', closeCitationPanel);
+        console.log('Backdrop handler added');
+    }
+    
+    // Add keyboard support for closing panel
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            closeCitationPanel();
+        }
     });
 }
 
@@ -377,6 +571,347 @@ function copyToClipboard() {
     }
 }
 
+function showCitationDetails(citationId, url) {
+    // Find the basis entry that matches this URL
+    const basisEntry = findBasisByUrl(url);
+    
+    if (!basisEntry) {
+        // Fallback to scrolling if no basis data found
+        const target = document.getElementById(`citation-${citationId}`);
+        if (target) {
+            target.scrollIntoView({ block: 'center' });
+        }
+        return;
+    }
+    
+    // Populate citation panel with basis data
+    const citationContent = document.getElementById('citation-content');
+    citationContent.innerHTML = `
+        <div class="citation-details">
+            <div class="citation-url mb-3">
+                <h6>Source</h6>
+                <a href="${url}" target="_blank" class="text-break">
+                    <i class="fas fa-external-link-alt me-1"></i>
+                    ${url}
+                </a>
+            </div>
+            
+            ${basisEntry.excerpts && basisEntry.excerpts.length > 0 ? `
+                <div class="citation-excerpts mb-3">
+                    <h6>Key Excerpts</h6>
+                    ${basisEntry.excerpts.map(excerpt => `
+                        <blockquote class="blockquote-sm">
+                            <p class="mb-2">${excerpt}</p>
+                        </blockquote>
+                    `).join('')}
+                </div>
+            ` : ''}
+            
+            ${basisEntry.reasoning ? `
+                <div class="citation-reasoning mb-3">
+                    <h6>Reasoning</h6>
+                    <p class="text-muted">${basisEntry.reasoning}</p>
+                </div>
+            ` : ''}
+            
+            ${basisEntry.confidence ? `
+                <div class="citation-confidence">
+                    <h6>Confidence Level</h6>
+                    <span class="badge bg-${getConfidenceBadgeColor(basisEntry.confidence)}">
+                        ${basisEntry.confidence.toUpperCase()}
+                    </span>
+                </div>
+            ` : ''}
+        </div>
+    `;
+    
+    // Show the panel
+    document.getElementById('citation-panel').classList.add('active');
+    document.getElementById('citation-backdrop').classList.add('active');
+}
+
+function findBasisByUrl(url) {
+    if (!window.reportBasis || !Array.isArray(window.reportBasis) || window.reportBasis.length === 0) {
+        console.log('No basis data available');
+        return null;
+    }
+    
+    console.log('Searching for URL:', url);
+    console.log('Available basis entries:', window.reportBasis.length);
+    
+    // The basis structure is: window.reportBasis[0].citations[...]
+    const basisEntry = window.reportBasis[0];
+    if (!basisEntry || !basisEntry.citations || !Array.isArray(basisEntry.citations)) {
+        console.log('No citations in basis data');
+        return null;
+    }
+    
+    console.log('Searching through', basisEntry.citations.length, 'citations');
+    
+    // First try exact match
+    for (let i = 0; i < basisEntry.citations.length; i++) {
+        const citation = basisEntry.citations[i];
+        if (citation.url === url) {
+            console.log('✅ Found exact matching citation:', citation.url);
+            return {
+                ...citation,
+                reasoning: basisEntry.reasoning,
+                confidence: basisEntry.confidence
+            };
+        }
+    }
+    
+    // If no exact match, try "contains" matching
+    console.log('🔄 No exact match, trying contains matching...');
+    for (let i = 0; i < basisEntry.citations.length; i++) {
+        const citation = basisEntry.citations[i];
+        
+        // Check if basis URL is contained in extracted URL (handles contaminated URLs like "platformAI")
+        if (url.includes(citation.url)) {
+            console.log('✅ Found basis URL contained in extracted URL:', citation.url);
+            return {
+                ...citation,
+                reasoning: basisEntry.reasoning,
+                confidence: basisEntry.confidence
+            };
+        }
+        
+        // Check if extracted URL is contained in basis URL (handles truncated URLs)
+        if (citation.url.includes(url)) {
+            console.log('✅ Found extracted URL contained in basis URL:', citation.url);
+            return {
+                ...citation,
+                reasoning: basisEntry.reasoning,
+                confidence: basisEntry.confidence
+            };
+        }
+    }
+    
+    console.log('❌ No matching citation found for URL:', url);
+    return null;
+}
+
+function getConfidenceBadgeColor(confidence) {
+    switch (confidence.toLowerCase()) {
+        case 'high': return 'success';
+        case 'medium': return 'warning';
+        case 'low': return 'danger';
+        default: return 'secondary';
+    }
+}
+
+function closeCitationPanel() {
+    document.getElementById('citation-panel').classList.remove('active');
+    document.getElementById('citation-backdrop').classList.remove('active');
+}
+
+function tryFindReferenceInRawContent(citationId) {
+    // If the processed references don't have anchors, try to find them in raw content
+    const reportContent = document.getElementById('report-content');
+    if (!reportContent) return;
+    
+    // Look for numbered references in the content
+    const allText = reportContent.textContent;
+    const lines = allText.split('\n');
+    
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        // Look for pattern like "1. Title URL" or "1. [Title](URL)"
+        const referenceMatch = line.match(new RegExp(`^${citationId}\\.\s*(.+)`));
+        if (referenceMatch) {
+            const referenceText = referenceMatch[1];
+            console.log(`Found reference ${citationId} in raw content:`, referenceText);
+            
+            // Extract URL from this line
+            const urlMatch = referenceText.match(/https?:\/\/[^\s\])\>]+/);
+            if (urlMatch && urlMatch[0]) {
+                const url = urlMatch[0];
+                console.log('Extracted URL from raw reference:', url);
+                showCitationDetails(citationId, url);
+                return;
+            }
+        }
+    }
+    
+    // FALLBACK: If no numbered reference found, get the Nth unique URL from basis data
+    console.log(`No reference ${citationId} found in text, using basis data fallback...`);
+    const basisEntry = window.reportBasis?.[0];
+    if (basisEntry?.citations) {
+        // Get unique URLs
+        const uniqueUrls = [];
+        const seenUrls = new Set();
+        
+        basisEntry.citations.forEach(citation => {
+            if (citation.url && !seenUrls.has(citation.url)) {
+                uniqueUrls.push(citation.url);
+                seenUrls.add(citation.url);
+            }
+        });
+        
+        // Get the URL for this citation number (1-indexed)
+        const citationIndex = parseInt(citationId) - 1;
+        if (citationIndex >= 0 && citationIndex < uniqueUrls.length) {
+            const url = uniqueUrls[citationIndex];
+            console.log(`Using basis fallback - citation ${citationId} maps to URL:`, url);
+            showCitationDetails(citationId, url);
+            return;
+        }
+    }
+    
+    console.log(`Could not find reference ${citationId} anywhere`);
+}
+
+function manuallyProcessReferencesUnderHeading(referencesHeading) {
+    console.log('🔍 Processing references under heading:', referencesHeading.tagName);
+    
+    // Get all elements after the References heading until next heading or end
+    let currentElement = referencesHeading.nextElementSibling;
+    let allReferencesText = '';
+    let elementCount = 0;
+    
+    console.log('Starting to collect elements after heading...');
+    
+    while (currentElement && elementCount < 50) { // Limit to prevent infinite loops
+        elementCount++;
+        console.log(`Element ${elementCount}:`, currentElement.tagName, currentElement.textContent?.substring(0, 50));
+        
+        // Stop if we hit another heading
+        if (/^H[1-6]$/i.test(currentElement.tagName)) {
+            console.log('Hit another heading, stopping collection');
+            break;
+        }
+        
+        // Collect text content
+        const text = currentElement.textContent || currentElement.innerText;
+        if (text.trim()) {
+            allReferencesText += text + '\n';
+        }
+        
+        currentElement = currentElement.nextElementSibling;
+    }
+    
+    console.log('Total elements processed:', elementCount);
+    console.log('References content under heading (first 800 chars):', allReferencesText.substring(0, 800));
+    
+    // Try different approaches to parse references
+    let references = [];
+    
+    // Approach 1: Look for numbered references first
+    const lines = allReferencesText.split('\n').filter(line => line.trim());
+    console.log('Processing references manually, found lines:', lines.length);
+    console.log('First 5 lines:', lines.slice(0, 5));
+    
+    let foundNumberedReferences = false;
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        const match = line.match(/^(\d+)\.\s*(.+)/);
+        if (match) {
+            foundNumberedReferences = true;
+            const num = parseInt(match[1]);
+            const text = match[2];
+            references.push({ num, text });
+        }
+    }
+    
+    // Approach 2: If no numbered references, try to split by URLs and add numbers
+    if (!foundNumberedReferences) {
+        console.log('❌ No numbered references found, trying URL-based splitting...');
+        
+        // Split by URLs - look for pattern like "Title. https://..."
+        const urlPattern = /https?:\/\/[^\s]+/g;
+        const urlMatches = allReferencesText.match(urlPattern);
+        console.log('Found URLs:', urlMatches?.length || 0);
+        
+        if (urlMatches && urlMatches.length > 0) {
+            // Split content by URLs to extract titles
+            const parts = allReferencesText.split(/(https?:\/\/[^\s]+)/);
+            console.log('Split parts:', parts.length);
+            
+            let refNum = 1;
+            for (let i = 0; i < parts.length - 1; i += 2) {
+                const title = parts[i].trim();
+                const url = parts[i + 1];
+                
+                if (title && url && url.startsWith('http')) {
+                    // Clean up title (remove trailing dots, etc.)
+                    const cleanTitle = title.replace(/\.$/, '').trim();
+                    if (cleanTitle) {
+                        const fullText = `${cleanTitle}. ${url}`;
+                        references.push({ num: refNum, text: fullText });
+                        console.log(`📝 Created reference ${refNum}: ${cleanTitle.substring(0, 50)}...`);
+                        refNum++;
+                    }
+                }
+            }
+        }
+    }
+    
+    console.log(`Found ${references.length} references to create`);
+    
+    // Create anchor elements for all found references
+    let citationCount = 0;
+    for (const ref of references) {
+        const { num, text } = ref;
+        
+        console.log(`✅ Creating reference anchor for citation ${num}:`, text.substring(0, 100));
+        
+        // Check if anchor already exists
+        const existing = document.getElementById(`citation-${num}`);
+        if (existing) {
+            console.log(`⚠️ Anchor citation-${num} already exists, skipping`);
+            continue;
+        }
+        
+        // Create anchor element and insert it after the heading
+        const refDiv = document.createElement('div');
+        refDiv.id = `citation-${num}`;
+        refDiv.className = 'citation-item';
+        refDiv.innerHTML = `<strong>[${num}]</strong> ${text}`;
+        
+        // Insert after the references heading
+        referencesHeading.parentNode.insertBefore(refDiv, referencesHeading.nextSibling);
+        console.log(`✅ Successfully created and inserted citation-${num}`);
+        citationCount++;
+    }
+    
+    console.log(`🎯 Manually created ${citationCount} reference anchors total`);
+}
+
+function createNumberedReferencesFromBasis() {
+    const reportContent = document.getElementById('report-content');
+    if (!reportContent || !window.reportBasis?.[0]?.citations) return;
+    
+    // Get unique URLs from basis data
+    const uniqueUrls = [];
+    const seenUrls = new Set();
+    
+    window.reportBasis[0].citations.forEach(citation => {
+        if (citation.url && !seenUrls.has(citation.url)) {
+            uniqueUrls.push(citation.url);
+            seenUrls.add(citation.url);
+        }
+    });
+    
+    console.log(`Creating ${uniqueUrls.length} numbered references from basis data`);
+    
+    // Create a references section
+    const referencesSection = document.createElement('div');
+    referencesSection.innerHTML = '<h2>References</h2>';
+    
+    uniqueUrls.forEach((url, index) => {
+        const num = index + 1;
+        const refDiv = document.createElement('div');
+        refDiv.id = `citation-${num}`;
+        refDiv.className = 'citation-item';
+        refDiv.innerHTML = `<strong>[${num}]</strong> <a href="${url}" target="_blank">${url}</a>`;
+        referencesSection.appendChild(refDiv);
+        console.log(`Created numbered reference ${num}: ${url}`);
+    });
+    
+    reportContent.appendChild(referencesSection);
+    console.log('Numbered references section created from basis data');
+}
+
 // Print styles
 window.addEventListener('beforeprint', function() {
     document.body.classList.add('printing');
@@ -435,6 +970,123 @@ window.addEventListener('afterprint', function() {
 
 .markdown-content p {
     text-align: justify;
+}
+
+/* Citation Panel Styles */
+.citation-panel {
+    position: fixed;
+    top: 0;
+    right: -400px;
+    width: 400px;
+    height: 100vh;
+    background: white;
+    box-shadow: -2px 0 10px rgba(0, 0, 0, 0.1);
+    z-index: 1050;
+    transition: right 0.3s ease;
+    overflow-y: auto;
+}
+
+.citation-panel.active {
+    right: 0;
+}
+
+.citation-panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    border-bottom: 1px solid #dee2e6;
+    background: #f8f9fa;
+}
+
+.citation-panel-body {
+    padding: 1rem;
+}
+
+.citation-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.3);
+    z-index: 1040;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.citation-backdrop.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+.citation-details h6 {
+    color: var(--primary-color);
+    font-size: 0.875rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}
+
+.citation-url a {
+    color: #495057;
+    text-decoration: none;
+    font-size: 0.875rem;
+}
+
+.citation-url a:hover {
+    color: var(--primary-color);
+    text-decoration: underline;
+}
+
+.blockquote-sm {
+    border-left: 3px solid var(--primary-color);
+    padding-left: 1rem;
+    margin: 0.5rem 0;
+    background: #f8f9fa;
+    border-radius: 0 0.25rem 0.25rem 0;
+}
+
+.blockquote-sm p {
+    font-size: 0.875rem;
+    line-height: 1.5;
+    margin-bottom: 0;
+    text-align: left;
+}
+
+.citation-reasoning p {
+    font-size: 0.875rem;
+    line-height: 1.5;
+}
+
+.citation-confidence {
+    padding-top: 0.5rem;
+    border-top: 1px solid #dee2e6;
+}
+
+/* Enhanced citation link styling */
+.citation-link {
+    color: var(--primary-color);
+    text-decoration: none;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    padding: 0.1rem 0.2rem;
+    border-radius: 0.2rem;
+}
+
+.citation-link:hover {
+    background-color: var(--primary-color);
+    color: white;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .citation-panel {
+        width: 100%;
+        right: -100%;
+    }
 }
 </style>
 {% endblock %}
