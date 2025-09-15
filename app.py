@@ -9,11 +9,9 @@ import threading
 import time
 from typing import Dict, Any, Optional
 from flask import Flask, render_template, request, jsonify, redirect, url_for, session, send_file, Response, stream_template
-from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.utils import secure_filename
 import tempfile
 from dotenv import load_dotenv
-from authlib.integrations.flask_client import OAuth
 
 from parallel import Parallel
 from parallel.types import TaskSpecParam
@@ -24,28 +22,6 @@ load_dotenv('.env.local')
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', 'your-secret-key-here')
 
-# Google OAuth Configuration
-GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID')
-GOOGLE_CLIENT_SECRET = os.getenv('GOOGLE_CLIENT_SECRET')
-
-# Flask-Login setup
-login_manager = LoginManager()
-login_manager.init_app(app)
-login_manager.login_view = 'login'
-login_manager.login_message = 'Please log in to generate reports.'
-
-# OAuth setup
-oauth = OAuth(app)
-google = oauth.register(
-    name='google',
-    client_id=GOOGLE_CLIENT_ID,
-    client_secret=GOOGLE_CLIENT_SECRET,
-    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
-    client_kwargs={
-        'scope': 'openid email profile'
-    }
-)
-
 # Initialize Parallel client
 PARALLEL_API_KEY = os.getenv('PARALLEL_API_KEY')
 if not PARALLEL_API_KEY:
@@ -54,58 +30,22 @@ if not PARALLEL_API_KEY:
 client = Parallel(api_key=PARALLEL_API_KEY)
 
 # Configuration
-MAX_REPORTS_PER_USER = 10  # Limit reports per authenticated user
+MAX_REPORTS_PER_HOUR = 5  # Global rate limit: 5 reports per hour
 DATABASE_PATH = 'market_research.db'
 
 # In-memory task tracking for background monitoring
 active_tasks = {}  # {task_run_id: {'metadata': task_metadata, 'thread': thread_obj}}
 
-# User class for Flask-Login
-class User(UserMixin):
-    def __init__(self, id, email, name, picture):
-        self.id = id
-        self.email = email
-        self.name = name
-        self.picture = picture
-
-@login_manager.user_loader
-def load_user(user_id):
-    """Load user by ID for Flask-Login"""
-    conn = sqlite3.connect(DATABASE_PATH)
-    cursor = conn.cursor()
-    
-    cursor.execute('SELECT id, email, name, picture FROM users WHERE id = ?', (user_id,))
-    result = cursor.fetchone()
-    conn.close()
-    
-    if result:
-        return User(result[0], result[1], result[2], result[3])
-    return None
 
 def init_database():
-    """Initialize SQLite database for storing reports and user data"""
+    """Initialize SQLite database for storing reports and global rate limiting"""
     conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
     
-    # Create users table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            id TEXT PRIMARY KEY,
-            email TEXT UNIQUE NOT NULL,
-            name TEXT NOT NULL,
-            picture TEXT,
-            report_count INTEGER DEFAULT 0,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            last_login TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-    
-    # Create reports table (updated to work with both authenticated and anonymous users)
+    # Create reports table (simplified for anonymous users)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS reports (
             id TEXT PRIMARY KEY,
-            user_id TEXT,
-            user_session TEXT,
             title TEXT NOT NULL,
             slug TEXT UNIQUE NOT NULL,
             industry TEXT NOT NULL,
@@ -116,77 +56,41 @@ def init_database():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             status TEXT DEFAULT 'completed',
             is_public INTEGER DEFAULT 1,
-            author_name TEXT,
-            FOREIGN KEY (user_id) REFERENCES users (id)
+            task_run_id TEXT
         )
     ''')
     
-    # Legacy session tracking table (keep for backwards compatibility)
+    # Global rate limiting table
     cursor.execute('''
-        CREATE TABLE IF NOT EXISTS user_sessions (
-            session_id TEXT PRIMARY KEY,
-            report_count INTEGER DEFAULT 0,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            last_report_at TIMESTAMP
+        CREATE TABLE IF NOT EXISTS rate_limit (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
     
     conn.commit()
     conn.close()
 
-def get_or_create_user(user_info):
-    """Get or create user from Google OAuth info"""
-    conn = sqlite3.connect(DATABASE_PATH)
-    cursor = conn.cursor()
-    
-    user_id = user_info['sub']  # Google's unique user ID
-    email = user_info['email']
-    name = user_info['name']
-    picture = user_info.get('picture', '')
-    
-    # Check if user exists
-    cursor.execute('SELECT id, email, name, picture, report_count FROM users WHERE id = ?', (user_id,))
-    result = cursor.fetchone()
-    
-    if result:
-        # Update last login
-        cursor.execute('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?', (user_id,))
-        conn.commit()
-        conn.close()
-        return User(result[0], result[1], result[2], result[3])
-    else:
-        # Create new user
-        cursor.execute('''
-            INSERT INTO users (id, email, name, picture, report_count)
-            VALUES (?, ?, ?, ?, 0)
-        ''', (user_id, email, name, picture))
-        conn.commit()
-        conn.close()
-        return User(user_id, email, name, picture)
 
-def get_user_report_count(user_id=None):
-    """Get the number of reports for an authenticated user"""
-    if not user_id:
-        return 0
-        
+def get_recent_report_count():
+    """Get the number of reports generated in the last hour (global rate limiting)"""
     conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
     
-    cursor.execute('SELECT report_count FROM users WHERE id = ?', (user_id,))
+    # Get count of reports in the last hour
+    one_hour_ago = datetime.datetime.now() - datetime.timedelta(hours=1)
+    cursor.execute('SELECT COUNT(*) FROM rate_limit WHERE created_at > ?', (one_hour_ago,))
     result = cursor.fetchone()
     
     conn.close()
     return result[0] if result else 0
 
-def increment_user_report_count(user_id):
-    """Increment authenticated user report count"""
+def record_report_generation():
+    """Record a new report generation for global rate limiting"""
     conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
     
-    cursor.execute('''
-        UPDATE users SET report_count = report_count + 1, last_login = CURRENT_TIMESTAMP 
-        WHERE id = ?
-    ''', (user_id,))
+    cursor.execute('INSERT INTO rate_limit DEFAULT VALUES')
     
     conn.commit()
     conn.close()
@@ -261,7 +165,7 @@ def convert_basis_to_dict(basis):
     
     return result
 
-def save_report(title, slug, industry, geography, details, content, basis=None, user_id=None, author_name=None, task_run_id=None):
+def save_report(title, slug, industry, geography, details, content, basis=None, task_run_id=None):
     """Save report to database"""
     conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
@@ -279,9 +183,9 @@ def save_report(title, slug, industry, geography, details, content, basis=None, 
             basis_json = None
     
     cursor.execute('''
-        INSERT INTO reports (id, user_id, title, slug, industry, geography, details, content, basis, author_name, is_public, task_run_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
-    ''', (report_id, user_id, title, slug, industry, geography, details, content, basis_json, author_name, task_run_id))
+        INSERT INTO reports (id, title, slug, industry, geography, details, content, basis, is_public, task_run_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+    ''', (report_id, title, slug, industry, geography, details, content, basis_json, task_run_id))
     
     conn.commit()
     conn.close()
@@ -294,7 +198,7 @@ def get_report_by_slug(slug):
     cursor = conn.cursor()
     
     cursor.execute('''
-        SELECT id, title, industry, geography, details, content, basis, created_at, author_name, task_run_id
+        SELECT id, title, industry, geography, details, content, basis, created_at, task_run_id
         FROM reports WHERE slug = ? AND is_public = 1
     ''', (slug,))
     
@@ -319,8 +223,7 @@ def get_report_by_slug(slug):
             'content': result[5],
             'basis': basis_data,
             'created_at': result[7],
-            'author_name': result[8],
-            'task_run_id': result[9],
+            'task_run_id': result[8],
             'slug': slug
         }
     return None
@@ -331,7 +234,7 @@ def get_all_public_reports():
     cursor = conn.cursor()
     
     cursor.execute('''
-        SELECT id, title, slug, industry, geography, created_at, author_name
+        SELECT id, title, slug, industry, geography, created_at
         FROM reports WHERE is_public = 1
         ORDER BY created_at DESC
     ''', ())
@@ -345,100 +248,36 @@ def get_all_public_reports():
         'slug': row[2],
         'industry': row[3],
         'geography': row[4],
-        'created_at': row[5],
-        'author_name': row[6]
-    } for row in results]
-
-def get_user_reports(user_id):
-    """Get all reports for an authenticated user"""
-    conn = sqlite3.connect(DATABASE_PATH)
-    cursor = conn.cursor()
-    
-    cursor.execute('''
-        SELECT id, title, slug, industry, geography, created_at
-        FROM reports WHERE user_id = ?
-        ORDER BY created_at DESC
-    ''', (user_id,))
-    
-    results = cursor.fetchall()
-    conn.close()
-    
-    return [{
-        'id': row[0],
-        'title': row[1],
-        'slug': row[2],
-        'industry': row[3],
-        'geography': row[4],
         'created_at': row[5]
     } for row in results]
 
-# OAuth Routes
-@app.route('/login')
-def login():
-    """Initiate Google OAuth login"""
-    redirect_uri = url_for('auth_callback', _external=True)
-    return google.authorize_redirect(redirect_uri)
 
-@app.route('/auth/callback')
-def auth_callback():
-    """Handle Google OAuth callback"""
-    try:
-        token = google.authorize_access_token()
-        user_info = token.get('userinfo')
-        
-        if user_info:
-            user = get_or_create_user(user_info)
-            login_user(user)
-            
-            # Redirect to where they came from or homepage
-            next_page = request.args.get('next')
-            return redirect(next_page) if next_page else redirect(url_for('index'))
-        else:
-            return jsonify({'error': 'Failed to get user info from Google'}), 400
-            
-    except Exception as e:
-        return jsonify({'error': f'Authentication failed: {str(e)}'}), 400
-
-@app.route('/logout')
-def logout():
-    """Logout user"""
-    logout_user()
-    return redirect(url_for('index'))
 
 @app.route('/')
 def index():
-    """Main page with public report library and auth-gated report generation"""
+    """Main page with public report library and report generation"""
     # Get all public reports for the library
     public_reports = get_all_public_reports()
     
-    # Get user-specific data if authenticated
-    user_report_count = 0
-    user_reports = []
-    
-    if current_user.is_authenticated:
-        user_report_count = get_user_report_count(current_user.id)
-        user_reports = get_user_reports(current_user.id)
+    # Get current rate limit status
+    recent_report_count = get_recent_report_count()
     
     return render_template('index.html', 
-                         report_count=user_report_count,
-                         max_reports=MAX_REPORTS_PER_USER,
-                         user_reports=user_reports,
-                         public_reports=public_reports,
-                         is_authenticated=current_user.is_authenticated)
+                         recent_report_count=recent_report_count,
+                         max_reports_per_hour=MAX_REPORTS_PER_HOUR,
+                         public_reports=public_reports)
 
 @app.route('/generate-report', methods=['POST'])
-@login_required
 def generate_report():
-    """Generate a new market research report (requires authentication)"""
-    user_id = current_user.id
-    report_count = get_user_report_count(user_id)
+    """Generate a new market research report (global rate limited)"""
+    # Check global rate limit
+    recent_report_count = get_recent_report_count()
     
-    # Check if user has exceeded limit
-    if report_count >= MAX_REPORTS_PER_USER:
+    if recent_report_count >= MAX_REPORTS_PER_HOUR:
         return jsonify({
-            'error': f'You have reached the maximum limit of {MAX_REPORTS_PER_USER} reports.',
-            'report_count': report_count,
-            'max_reports': MAX_REPORTS_PER_USER
+            'error': f'Rate limit exceeded. Maximum {MAX_REPORTS_PER_HOUR} reports per hour globally.',
+            'recent_report_count': recent_report_count,
+            'max_reports_per_hour': MAX_REPORTS_PER_HOUR
         }), 429
     
     data = request.json
@@ -469,9 +308,7 @@ def generate_report():
             'task_run_id': task_run.run_id,
             'industry': industry,
             'geography': geography,
-            'details': details,
-            'user_id': user_id,
-            'author_name': current_user.name
+            'details': details
         }
         
         # Store in session for completion handling
@@ -505,26 +342,14 @@ def generate_report():
 @app.route('/stream-events/<task_run_id>')
 def stream_events(task_run_id):
     """Stream real-time events from a task run via SSE with robust error handling"""
-    # Check authorization BEFORE creating the generator
-    user_authenticated = current_user and current_user.is_authenticated
-    current_user_id = current_user.id if user_authenticated else None
+    print(f"SSE request for task {task_run_id}")
     
-    print(f"SSE request for task {task_run_id}, user authenticated: {user_authenticated}")
-    
-    if not user_authenticated:
-        print("SSE: User not authenticated")
-        def auth_error():
-            yield f"data: {json.dumps({'type': 'error', 'message': 'Authentication required'})}\n\n"
-        response = Response(auth_error(), mimetype='text/event-stream')
-        response.headers['Cache-Control'] = 'no-cache'
-        return response
-        
     task_metadata = session.get(f'task_{task_run_id}')
-    if not task_metadata or task_metadata['user_id'] != current_user_id:
-        print(f"SSE: Unauthorized access. Task metadata: {task_metadata}, Current user: {current_user_id}")
-        def unauthorized_error():
-            yield f"data: {json.dumps({'type': 'error', 'message': 'Unauthorized access'})}\n\n"
-        response = Response(unauthorized_error(), mimetype='text/event-stream')
+    if not task_metadata:
+        print(f"SSE: Task metadata not found for {task_run_id}")
+        def not_found_error():
+            yield f"data: {json.dumps({'type': 'error', 'message': 'Task not found'})}\n\n"
+        response = Response(not_found_error(), mimetype='text/event-stream')
         response.headers['Cache-Control'] = 'no-cache'
         return response
     
@@ -664,7 +489,6 @@ def process_task_event(event_type, event_data):
     return processed
 
 @app.route('/monitor-task/<task_run_id>', methods=['POST'])
-@login_required
 def monitor_task_with_sse(task_run_id):
     """
     Monitor task with robust reconnection and state tracking
@@ -675,10 +499,10 @@ def monitor_task_with_sse(task_run_id):
     - Fetch final result after completion
     """
     try:
-        # Check authorization
+        # Check if task exists
         task_metadata = session.get(f'task_{task_run_id}')
-        if not task_metadata or task_metadata['user_id'] != current_user.id:
-            return jsonify({'error': 'Unauthorized'}), 403
+        if not task_metadata:
+            return jsonify({'error': 'Task not found'}), 404
         
         # Monitor with exponential backoff
         task_completed, final_status, error_msg = monitor_task_completion_robust(
@@ -708,12 +532,10 @@ def monitor_task_with_sse(task_run_id):
                     task_metadata['details'],
                     content,
                     basis,
-                    user_id=task_metadata['user_id'],
-                    author_name=task_metadata['author_name'],
                     task_run_id=task_run_id
                 )
                 
-                increment_user_report_count(task_metadata['user_id'])
+                record_report_generation()
                 
                 # Clean up
                 session.pop(f'task_{task_run_id}', None)
@@ -844,14 +666,13 @@ def is_recoverable_error(error_message):
     return True
 
 @app.route('/task-status/<task_run_id>')
-@login_required
 def get_task_status(task_run_id):
     """Get current task status for polling fallback"""
     try:
-        # Check if user has access to this task
+        # Check if task exists
         task_metadata = session.get(f'task_{task_run_id}')
-        if not task_metadata or task_metadata['user_id'] != current_user.id:
-            return jsonify({'error': 'Unauthorized'}), 403
+        if not task_metadata:
+            return jsonify({'error': 'Task not found'}), 404
         
         # Get task status from Parallel API
         try:
@@ -922,12 +743,10 @@ def monitor_task_completion(task_run_id, task_metadata):
                     task_metadata['details'], 
                     content,
                     basis,
-                    user_id=task_metadata['user_id'], 
-                    author_name=task_metadata['author_name'],
                     task_run_id=task_run_id
                 )
                 
-                increment_user_report_count(task_metadata['user_id'])
+                record_report_generation()
                 
                 print(f"Background monitor saved report {report_id} for task {task_run_id}")
                 
@@ -945,7 +764,6 @@ def monitor_task_completion(task_run_id, task_metadata):
             del active_tasks[task_run_id]
 
 @app.route('/complete-task/<task_run_id>', methods=['POST'])
-@login_required  
 def complete_task(task_run_id):
     """Handle task completion and save the report"""
     try:
@@ -953,10 +771,6 @@ def complete_task(task_run_id):
         task_metadata = session.get(f'task_{task_run_id}')
         if not task_metadata:
             return jsonify({'error': 'Task metadata not found'}), 404
-            
-        # Check if user matches
-        if task_metadata['user_id'] != current_user.id:
-            return jsonify({'error': 'Unauthorized'}), 403
             
         # Get the final result
         run_result = client.task_run.result(task_run_id)
@@ -972,7 +786,7 @@ def complete_task(task_run_id):
         
         slug = create_slug(title)
         
-        # Save report with user info
+        # Save report
         report_id = save_report(
             title, slug, 
             task_metadata['industry'], 
@@ -980,13 +794,11 @@ def complete_task(task_run_id):
             task_metadata['details'], 
             content,
             basis,
-            user_id=task_metadata['user_id'], 
-            author_name=task_metadata['author_name'],
             task_run_id=task_run_id
         )
         
-        # Increment user report count
-        increment_user_report_count(task_metadata['user_id'])
+        # Record report generation for rate limiting
+        record_report_generation()
         
         # Clean up session and active tasks tracking
         session.pop(f'task_{task_run_id}', None)
@@ -1047,25 +859,17 @@ def download_report(slug):
 
 @app.route('/api/status')
 def api_status():
-    """API endpoint to check user status"""
-    if current_user.is_authenticated:
-        report_count = get_user_report_count(current_user.id)
-        return jsonify({
-            'authenticated': True,
-            'user_name': current_user.name,
-            'user_email': current_user.email,
-            'report_count': report_count,
-            'max_reports': MAX_REPORTS_PER_USER,
-            'remaining_reports': MAX_REPORTS_PER_USER - report_count
-        })
-    else:
-        return jsonify({
-            'authenticated': False,
-            'report_count': 0,
-            'max_reports': MAX_REPORTS_PER_USER,
-            'remaining_reports': 0,
-            'login_required': True
-        })
+    """API endpoint to check global rate limit status"""
+    recent_report_count = get_recent_report_count()
+    remaining_reports = MAX_REPORTS_PER_HOUR - recent_report_count
+    
+    return jsonify({
+        'authenticated': False,  # No authentication required
+        'recent_report_count': recent_report_count,
+        'max_reports_per_hour': MAX_REPORTS_PER_HOUR,
+        'remaining_reports': max(0, remaining_reports),
+        'login_required': False
+    })
 
 if __name__ == '__main__':
     # Initialize database

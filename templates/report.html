@@ -221,7 +221,9 @@ document.addEventListener('DOMContentLoaded', function() {
             
             for (const heading of headings) {
                 console.log('Checking heading:', heading.textContent);
-                if (heading.textContent.toLowerCase().includes('reference')) {
+                const headingText = heading.textContent.toLowerCase().trim();
+                // Only match exact "references" or "citations", not headings that contain these words
+                if (headingText === 'references' || headingText === 'citations') {
                     referencesHeading = heading;
                     console.log('✅ Found References heading:', heading.textContent);
                     break;

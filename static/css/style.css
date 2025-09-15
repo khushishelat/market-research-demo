@@ -1399,6 +1399,11 @@ footer {
     color: var(--danger-color);
 }
 
+#current-event[data-status="connection_lost"] {
+    color: var(--warning-color);
+    font-weight: 600;
+}
+
 /* Enhanced status indicators */
 .streaming-updates {
     transition: border-left-color 0.3s ease;

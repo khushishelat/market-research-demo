@@ -27,31 +27,11 @@
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto">
-                    {% if current_user.is_authenticated %}
-                        <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown">
-                                {% if current_user.picture %}
-                                    <img src="{{ current_user.picture }}" alt="Profile" class="rounded-circle me-2" width="32" height="32">
-                                {% else %}
-                                    <i class="fas fa-user-circle me-2"></i>
-                                {% endif %}
-                                {{ current_user.name }}
-                            </a>
-                            <ul class="dropdown-menu">
-                                <li><h6 class="dropdown-header">{{ current_user.email }}</h6></li>
-                                <li><hr class="dropdown-divider"></li>
-                                <li><a class="dropdown-item" href="{{ url_for('logout') }}">
-                                    <i class="fas fa-sign-out-alt me-2"></i>Logout
-                                </a></li>
-                            </ul>
-                        </li>
-                    {% else %}
-                        <li class="nav-item">
-                            <a class="btn btn-outline-primary" href="{{ url_for('login') }}">
-                                <i class="fab fa-google me-2"></i>Sign in with Google
-                            </a>
-                        </li>
-                    {% endif %}
+                    <li class="nav-item">
+                        <span class="nav-link">
+                            <i class="fas fa-globe me-2"></i>Public Demo - No Login Required
+                        </span>
+                    </li>
                 </ul>
             </div>
         </div>

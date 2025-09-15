@@ -200,6 +200,26 @@ const App = {
     
     // Show success modal
     showSuccessModal(response) {
+        // Mark task as complete to stop all background monitoring
+        this.isTaskComplete = true;
+        
+        // Clean up all background processes
+        if (this.statusCheckInterval) {
+            clearInterval(this.statusCheckInterval);
+            this.statusCheckInterval = null;
+        }
+        
+        if (this.currentEventSource) {
+            this.currentEventSource.close();
+            this.currentEventSource = null;
+        }
+        
+        // Stop any pending reconnection attempts
+        if (this._reconnectTimeout) {
+            clearTimeout(this._reconnectTimeout);
+            this._reconnectTimeout = null;
+        }
+        
         const reportLinks = document.getElementById('report-links');
         if (reportLinks) {
             reportLinks.innerHTML = `
@@ -644,13 +664,17 @@ const App = {
                 event_type: 'reconnecting'
             });
             
-            setTimeout(() => {
+            this._reconnectTimeout = setTimeout(() => {
                 if (!this.isTaskComplete) {
                     this.connectToStreamRobust(taskRunId);
                 }
             }, waitTime);
         } else {
             console.log('Max reconnection attempts reached, falling back to robust monitoring');
+            this.updateStreamingProgress({
+                message: 'Connection issues detected. Checking if task completed in background...',
+                event_type: 'robust_monitoring'
+            });
             this.startRobustMonitoring(taskRunId);
         }
     },
@@ -683,9 +707,119 @@ const App = {
             }
         } catch (error) {
             console.error('Robust monitoring failed:', error);
-            this.showErrorModal('All monitoring methods failed. Please check your connection and try again.');
+            // Don't hide the UI completely - keep showing progress with manual check option
+            this.showConnectionLostUI(taskRunId);
+        }
+    },
+    
+    // Show connection lost UI with manual check option
+    showConnectionLostUI(taskRunId) {
+        this.updateStreamingProgress({
+            message: 'Connection lost, but your task is still running in the background. Click "Check Status" to see if it completed.',
+            event_type: 'connection_lost'
+        });
+        
+        // Add a manual check button to the progress area
+        const progressArea = document.getElementById('progress-area');
+        if (progressArea) {
+            const existingBtn = progressArea.querySelector('.manual-check-btn');
+            if (!existingBtn) {
+                const checkBtn = document.createElement('button');
+                checkBtn.className = 'btn btn-outline-primary mt-3 manual-check-btn';
+                checkBtn.innerHTML = '<i class="fas fa-sync-alt me-2"></i>Check Status';
+                checkBtn.onclick = () => this.manualStatusCheck(taskRunId);
+                
+                const cardBody = progressArea.querySelector('.card-body');
+                if (cardBody) {
+                    cardBody.appendChild(checkBtn);
+                }
+            }
+        }
+        
+        // Start periodic status checking every 30 seconds
+        this.startPeriodicStatusCheck(taskRunId);
+    },
+    
+    // Start periodic status checking
+    startPeriodicStatusCheck(taskRunId) {
+        if (this.statusCheckInterval) {
+            clearInterval(this.statusCheckInterval);
+        }
+        
+        this.statusCheckInterval = setInterval(async () => {
+            if (this.isTaskComplete) {
+                clearInterval(this.statusCheckInterval);
+                return;
+            }
+            
+            try {
+                const statusResponse = await fetch(`/task-status/${taskRunId}`);
+                const statusResult = await statusResponse.json();
+                
+                if (statusResult.is_complete) {
+                    clearInterval(this.statusCheckInterval);
+                    if (statusResult.status === 'completed') {
+                        // Automatically complete the task
+                        this.manualStatusCheck(taskRunId);
+                    } else {
+                        this.showErrorModal(`Task completed with status: ${statusResult.status}`);
+                    }
+                }
+            } catch (error) {
+                console.log('Periodic status check failed:', error);
+                // Don't show error, just continue checking
+            }
+        }, 30000); // Check every 30 seconds
+    },
+    
+    // Manual status check
+    async manualStatusCheck(taskRunId) {
+        const checkBtn = document.querySelector('.manual-check-btn');
+        if (checkBtn) {
+            checkBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Checking...';
+            checkBtn.disabled = true;
+        }
+        
+        try {
+            // Try the task status endpoint first
+            const statusResponse = await fetch(`/task-status/${taskRunId}`);
+            const statusResult = await statusResponse.json();
+            
+            if (statusResult.is_complete) {
+                if (statusResult.status === 'completed') {
+                    // Try to complete the task
+                    const completeResponse = await fetch(`/complete-task/${taskRunId}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                    const completeResult = await completeResponse.json();
+                    
+                    if (completeResult.success) {
+                        this.showSuccessModal(completeResult);
+                        return;
+                    }
+                }
+                this.showErrorModal(`Task completed with status: ${statusResult.status}`);
+            } else {
+                // Task still running, try to reconnect to stream
+                this.updateStreamingProgress({
+                    message: 'Task is still running. Attempting to reconnect...',
+                    event_type: 'reconnecting'
+                });
+                this.reconnectAttempts = 0; // Reset attempts
+                this.connectToStreamRobust(taskRunId);
+            }
+        } catch (error) {
+            console.error('Manual status check failed:', error);
+            this.updateStreamingProgress({
+                message: 'Status check failed. Your task may still be running. Try again in a moment.',
+                event_type: 'error'
+            });
         } finally {
-            this.setLoadingState(false);
+            if (checkBtn) {
+                checkBtn.innerHTML = '<i class="fas fa-sync-alt me-2"></i>Check Status';
+                checkBtn.disabled = false;
+            }
         }
     },
     
