@@ -699,7 +699,7 @@ footer {
 
 .markdown-content h1,
 .markdown-content h2 {
-    color: #007bff;
+    color: var(--primary-color); /* Use orange instead of blue */
     font-weight: 600;
     margin-top: 2rem;
     margin-bottom: 1rem;
@@ -1105,6 +1105,17 @@ footer {
 }
 
 /* Citation Styling */
+.citation-number {
+    display: inline;
+    color: var(--gray-text);
+    font-size: 0.85em;
+    font-weight: 500;
+    font-family: 'FT System Mono', monospace;
+    margin: 0 0.1rem;
+    vertical-align: super;
+    line-height: 1;
+}
+
 .citation-link {
     display: inline-block;
     background-color: var(--light-border);
@@ -1147,7 +1158,7 @@ footer {
     line-height: 1.7;
     color: var(--index-black);
     font-family: 'Gerstner Programm', serif;
-    font-weight: 500;
+    font-weight: 400; /* Lighter weight for main text */
 }
 
 .markdown-content .report-heading {
@@ -1155,13 +1166,15 @@ footer {
 }
 
 .markdown-content h1.report-heading {
-    color: var(--index-black);
+    color: var(--primary-color); /* Use orange for consistency */
     font-weight: 500;
     font-size: 1.5rem;
     margin: 2rem 0 1rem 0;
     padding-bottom: 0.5rem;
-    border-bottom: 1px solid var(--light-border);
+    border-bottom: 2px solid var(--primary-color); /* Match h2 styling */
     font-family: 'Gerstner Programm', serif;
+    display: inline-block;
+    padding-right: 1rem;
 }
 
 .markdown-content h2.report-heading {
@@ -1192,6 +1205,7 @@ footer {
     margin-bottom: 1rem;
     text-align: left;
     max-width: 65ch;
+    font-weight: 400; /* Ensure paragraphs are not bold */
 }
 
 .markdown-content ul,
@@ -1220,6 +1234,33 @@ footer {
     padding: 0.2rem 0.4rem;
     border-radius: 4px;
     font-size: 0.9em;
+}
+
+/* Ensure headings don't get code styling even if they contain # symbols */
+.markdown-content h1 code,
+.markdown-content h2 code,
+.markdown-content h3 code,
+.markdown-content h4 code,
+.markdown-content h5 code,
+.markdown-content h6 code {
+    background: none !important;
+    color: inherit !important;
+    padding: 0 !important;
+    font-size: inherit !important;
+    border-radius: 0 !important;
+}
+
+/* Fix for content that starts with # but gets wrapped in code tags */
+.markdown-content code[data-content^="#"],
+.markdown-content code:first-child {
+    color: var(--primary-color) !important;
+    background: none !important;
+    padding: 0 !important;
+    font-size: 1.5rem !important;
+    font-weight: 500 !important;
+    display: block !important;
+    margin: 2rem 0 1rem 0 !important;
+    font-family: 'Gerstner Programm', serif !important;
 }
 
 .markdown-content pre {

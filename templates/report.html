@@ -12,96 +12,67 @@
 {% block content %}
 <div class="row">
     <div class="col-lg-10 mx-auto">
-        <!-- Report Header -->
-        <div class="d-flex justify-content-between align-items-start mb-4">
-            <div>
+        <!-- Compact Report Header -->
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div class="d-flex align-items-center gap-3">
                 <nav aria-label="breadcrumb">
-                    <ol class="breadcrumb">
+                    <ol class="breadcrumb mb-0">
                         <li class="breadcrumb-item">
-                            <a href="{{ url_for('index') }}">
+                            <a href="{{ url_for('index') }}" class="text-decoration-none">
                                 <i class="fas fa-home me-1"></i>Home
                             </a>
                         </li>
                         <li class="breadcrumb-item active">{{ report.title }}</li>
                     </ol>
                 </nav>
-                <h1 class="display-5 mb-2 mono">{{ report.title }}</h1>
-                <p class="text-muted mb-0 small">
-                    Generated {{ report.created_at }}
-                </p>
             </div>
-            <div class="d-flex gap-2">
+            <div class="d-flex align-items-center gap-2">
+                <small class="text-muted">{{ report.created_at }}</small>
                 <a href="{{ url_for('download_report', slug=report.slug) }}" 
                    class="btn btn-outline-primary btn-sm">
-                    <i class="fas fa-download me-1"></i>Download
+                    <i class="fas fa-download"></i> Download
                 </a>
                 <button class="btn btn-outline-secondary btn-sm" onclick="copyReportUrl()">
-                    <i class="fas fa-share me-1"></i>Share
+                    <i class="fas fa-share"></i> Share
                 </button>
             </div>
         </div>
 
-        <!-- Report Metadata -->
-        <div class="mb-4 py-3 border-bottom" style="border-color: var(--light-border) !important;">
-            <div class="row g-4">
-                <div class="col-md-3">
-                    <div class="stat-label">Industry</div>
-                    <div class="stat-value">{{ report.industry }}</div>
-                </div>
-                <div class="col-md-3">
-                    <div class="stat-label">Geography</div>
-                    <div class="stat-value">{{ report.geography or 'Global' }}</div>
-                </div>
-                <div class="col-md-3">
-                    <div class="stat-label">Research Focus</div>
-                    <div class="stat-value">{{ report.details or 'General' }}</div>
-                </div>
-                <div class="col-md-3">
-                    <div class="stat-label">Author</div>
-                    <div class="stat-value">{{ report.author_name or 'Anonymous' }}</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Report Content with Table of Contents -->
-        <div class="row">
-            <!-- Table of Contents Sidebar -->
-            <div class="col-lg-3">
-                <div class="toc-sidebar" id="table-of-contents">
-                    <div class="toc-header">
-                        <h6 class="stat-label mb-3">Contents</h6>
-                    </div>
+        <!-- Three Column Layout -->
+        <div class="report-layout">
+            <!-- Table of Contents Column -->
+            <div class="toc-column">
+                <div class="toc-container">
+                    <h6 class="toc-title">Table of Contents</h6>
                     <nav class="toc-nav" id="toc-nav">
                         <!-- TOC items will be generated automatically -->
                     </nav>
                 </div>
             </div>
             
-            <!-- Main Report Content -->
-            <div class="col-lg-9">
-                <div class="border-0">
-                    <div id="report-content" class="markdown-content">
-                        {{ report.content | safe }}
+            <!-- Report Content Column -->
+            <div class="report-column">
+                <div class="report-container">
+                    <div id="report-content" class="report-content">
+                        <!-- Content will be populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Basis Sidebar Column -->
+            <div class="basis-column" id="basis-column">
+                <div class="basis-container">
+                    <div class="basis-header">
+                        <h6>Basis View</h6>
+                        <button type="button" class="btn-close" id="close-basis-sidebar"></button>
+                    </div>
+                    <div class="basis-body" id="basis-body">
+                        <p class="text-muted">(Expands on first click)</p>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Citation Details Panel -->
-        <div id="citation-panel" class="citation-panel">
-            <div class="citation-panel-header">
-                <h6 class="mb-0">Source Details</h6>
-                <button type="button" class="btn-close" id="close-citation-panel" aria-label="Close"></button>
-            </div>
-            <div class="citation-panel-body">
-                <div id="citation-content">
-                    <p class="text-muted">Click on a citation to view source details</p>
-                </div>
-            </div>
-        </div>
-
-        <!-- Citation Panel Backdrop -->
-        <div id="citation-backdrop" class="citation-backdrop"></div>
 
         <!-- Report Footer -->
         <div class="mt-5 pt-4 border-top text-center" style="border-color: var(--light-border) !important;">
@@ -151,6 +122,9 @@
 {% if report.basis %}{{ report.basis | tojson | safe }}{% else %}[]{% endif %}
 </script>
 
+<!-- Pass raw markdown content to JavaScript -->
+<script type="text/plain" id="report-markdown-content">{{ report.content }}</script>
+
 <script>
 // Parse basis data from JSON script tag
 window.reportBasis = JSON.parse(document.getElementById('report-basis-data').textContent || '[]');
@@ -166,8 +140,10 @@ if (window.reportBasis.length > 0) {
 // Enhanced markdown formatting with table of contents generation
 document.addEventListener('DOMContentLoaded', function() {
     const content = document.getElementById('report-content');
-    if (content) {
-        const markdownText = content.textContent || content.innerText;
+    const markdownScript = document.getElementById('report-markdown-content');
+    
+    if (content && markdownScript) {
+        const markdownText = markdownScript.textContent || markdownScript.innerText;
         
         // Configure marked options for better parsing
         marked.setOptions({
@@ -225,75 +201,9 @@ document.addEventListener('DOMContentLoaded', function() {
         
         console.log('Citation links created in HTML');
         
-        // Process references section to add citation anchors
-        // Look for references patterns more flexibly - try multiple patterns
-        
-        let referencesFound = 0;
-        
-        // Pattern 1: Standard numbered references like "1. Title. URL"
-        html = html.replace(/(\n|^|\<p\>)(\d+)\.\s+(.+?)(?=\n\d+\.|\<\/p\>|\n\n|\n$|$)/gm, function(match, prefix, num, text) {
-            console.log(`Pattern 1 - Creating reference anchor for citation ${num}:`, text.substring(0, 100));
-            referencesFound++;
-            return `${prefix}<div id="citation-${num}" class="citation-item"><strong>[${num}]</strong> ${text.trim()}</div>`;
-        });
-        
-        // Pattern 2: References with markdown links like "1. [Title](URL)"
-        html = html.replace(/(\n|^|\<p\>)(\d+)\.\s*\[([^\]]+)\]\(([^)]+)\)(.*?)(?=\n\d+\.|\<\/p\>|\n\n|\n$|$)/gm, function(match, prefix, num, title, url, rest) {
-            console.log(`Pattern 2 - Creating reference anchor for citation ${num}:`, title);
-            referencesFound++;
-            return `${prefix}<div id="citation-${num}" class="citation-item"><strong>[${num}]</strong> <a href="${url}" target="_blank">${title}</a>${rest}</div>`;
-        });
-        
-        // Pattern 3: Look for References section and numbered items within it
-        const referencesSection = html.match(/(References|REFERENCES|Sources|SOURCES)([\s\S]*?)(?=<\/div>|<div|<h\d|$)/i);
-        if (referencesSection && referencesFound === 0) {
-            const refContent = referencesSection[2];
-            console.log('Found references section content:', refContent.substring(0, 500));
-            
-            // Try multiple patterns for numbered references
-            let numberedRefs = refContent.match(/(\d+)\.\s*([^\n<]+(?:\n(?!\d+\.)[^\n<]*)*)/gm);
-            
-            // Alternative pattern for HTML formatted references
-            if (!numberedRefs) {
-                numberedRefs = refContent.match(/<p[^>]*>(\d+)\.\s*(.*?)<\/p>/gm);
-            }
-            
-            // Alternative pattern for line-break separated references
-            if (!numberedRefs) {
-                const lines = refContent.split(/\n|<br\s*\/?>/);
-                numberedRefs = lines.filter(line => /^\d+\./.test(line.trim()));
-            }
-            
-            console.log('Found numbered references:', numberedRefs);
-            
-            if (numberedRefs && numberedRefs.length > 0) {
-                numberedRefs.forEach(ref => {
-                    const match = ref.match(/(\d+)\.\s*(.*?)(<\/p>|$)/s);
-                    if (match) {
-                        const num = match[1];
-                        let text = match[2].trim();
-                        // Remove HTML tags from text
-                        text = text.replace(/<[^>]*>/g, '');
-                        console.log(`Pattern 3 - Creating reference anchor for citation ${num}:`, text.substring(0, 100));
-                        
-                        // Replace in the HTML - be more careful about replacement
-                        const anchorDiv = `<div id="citation-${num}" class="citation-item"><strong>[${num}]</strong> ${text}</div>`;
-                        
-                        // Find and replace the original reference in the HTML
-                        const originalRef = ref.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // Escape regex chars
-                        html = html.replace(new RegExp(originalRef, 'g'), anchorDiv);
-                        referencesFound++;
-                    }
-                });
-            }
-        }
-        
-        console.log(`Total references found and converted: ${referencesFound}`);
-        
-        // Also handle references in a "References" section
-        html = html.replace(/(references|sources|bibliography)/i, function(match) {
-            return `<div id="references-section">${match}</div>`;
-        });
+        // Skip all automatic reference processing to prevent duplicates
+        // Let the report content handle its own references naturally
+        console.log('Skipping reference pattern processing to avoid duplicates');
         
         // Set the processed HTML
         content.innerHTML = html;
@@ -301,7 +211,6 @@ document.addEventListener('DOMContentLoaded', function() {
         // Debug: Show actual References section content after processing
         setTimeout(() => {
             console.log('Starting post-processing reference check...');
-            console.log('Current referencesFound:', referencesFound);
             console.log('Current citation items:', document.querySelectorAll('.citation-item').length);
             
             // Look for References heading and everything after it
@@ -320,25 +229,23 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             if (referencesHeading) {
-                // Always try to manually process, regardless of referencesFound
-                console.log('Manually processing references under heading...');
-                manuallyProcessReferencesUnderHeading(referencesHeading);
+                console.log('✅ Found References heading, checking if anchors already exist...');
                 
-                // Update count after manual processing
-                setTimeout(() => {
-                    const newCount = document.querySelectorAll('.citation-item').length;
-                    console.log('After manual processing, citation items:', newCount);
-                }, 50);
+                // Only process if no citation anchors exist yet
+                const existingAnchors = document.querySelectorAll('.citation-item').length;
+                if (existingAnchors === 0) {
+                    console.log('No existing anchors found, processing references...');
+                    manuallyProcessReferencesUnderHeading(referencesHeading);
+                } else {
+                    console.log(`Found ${existingAnchors} existing anchors, skipping to avoid duplicates`);
+                }
             } else {
                 console.log('❌ No References heading found in DOM');
             }
         }, 100);
         
-        // FALLBACK: If still no references found, create them from basis data as numbered list
-        if (referencesFound === 0 && window.reportBasis && window.reportBasis.length > 0) {
-            console.log('No references found in content, creating numbered references from basis...');
-            createNumberedReferencesFromBasis();
-        }
+        // Skip all automatic reference creation - only use what's in the report content
+        console.log('Skipping automatic reference creation to avoid duplicates');
         
         console.log('HTML processed and set. Looking for citation elements...');
         console.log('Citation links after processing:', document.querySelectorAll('.citation-link').length);
@@ -361,11 +268,10 @@ function generateTableOfContents() {
     const tocNav = document.getElementById('toc-nav');
     
     if (headings.length === 0) {
-        document.getElementById('table-of-contents').style.display = 'none';
         return;
     }
     
-    let tocHTML = '<ul class="toc-list">';
+    let tocHTML = '<ul>';
     
     headings.forEach((heading, index) => {
         const level = parseInt(heading.tagName.substring(1));
@@ -377,11 +283,10 @@ function generateTableOfContents() {
         }
         
         // Apply different styling for H1 vs H2
-        const itemClass = level === 1 ? 'toc-item toc-main-title' : 'toc-item toc-section';
         const linkClass = level === 1 ? 'toc-link toc-link-main' : 'toc-link toc-link-section';
         
         tocHTML += `
-            <li class="${itemClass}">
+            <li>
                 <a href="#${id}" class="${linkClass}" data-target="${id}">
                     ${text}
                 </a>
@@ -391,6 +296,71 @@ function generateTableOfContents() {
     
     tocHTML += '</ul>';
     tocNav.innerHTML = tocHTML;
+}
+
+function initializeSmoothScrolling() {
+    document.querySelectorAll('.toc-link').forEach(link => {
+        link.addEventListener('click', function(e) {
+            e.preventDefault();
+            const targetId = this.getAttribute('data-target');
+            const target = document.getElementById(targetId);
+            
+            if (target) {
+                // Update active state
+                document.querySelectorAll('.toc-link').forEach(l => l.classList.remove('active'));
+                this.classList.add('active');
+                
+                // Smooth scroll within the report container
+                const reportContainer = document.querySelector('.report-container');
+                if (reportContainer) {
+                    // Calculate the position relative to the scrollable container
+                    const reportContent = document.getElementById('report-content');
+                    const targetOffset = target.offsetTop - reportContent.offsetTop;
+                    
+                    reportContainer.scrollTo({ 
+                        top: targetOffset - 20,
+                        behavior: 'smooth'
+                    });
+                    
+                    console.log('Scrolling to:', targetId, 'offset:', targetOffset);
+                }
+            }
+        });
+    });
+    
+    // Update active TOC item on scroll within report container
+    const reportContainer = document.querySelector('.report-container');
+    if (reportContainer) {
+        reportContainer.addEventListener('scroll', updateActiveTocItem);
+    }
+}
+
+function updateActiveTocItem() {
+    const headings = document.querySelectorAll('#report-content h1, #report-content h2');
+    const tocLinks = document.querySelectorAll('.toc-link');
+    const reportContainer = document.querySelector('.report-container');
+    const reportContent = document.getElementById('report-content');
+    
+    if (!reportContainer || !reportContent) return;
+    
+    let activeHeading = null;
+    const scrollTop = reportContainer.scrollTop;
+    
+    headings.forEach(heading => {
+        const offsetTop = heading.offsetTop - reportContent.offsetTop;
+        if (offsetTop <= scrollTop + 100) {
+            activeHeading = heading;
+        }
+    });
+    
+    if (activeHeading) {
+        tocLinks.forEach(link => {
+            link.classList.remove('active');
+            if (link.getAttribute('data-target') === activeHeading.id) {
+                link.classList.add('active');
+            }
+        });
+    }
 }
 
 function initializeCitationHandlers() {
@@ -468,78 +438,23 @@ function initializeCitationHandlers() {
     
     console.log('Citation handlers initialized');
     
-    // Initialize citation panel close handlers
-    const closeBtn = document.getElementById('close-citation-panel');
-    const backdrop = document.getElementById('citation-backdrop');
+    // Initialize basis sidebar close handlers
+    const closeBasisBtn = document.getElementById('close-basis-sidebar');
     
-    if (closeBtn) {
-        closeBtn.addEventListener('click', closeCitationPanel);
-        console.log('Close button handler added');
+    if (closeBasisBtn) {
+        closeBasisBtn.addEventListener('click', closeBasisSidebar);
+        console.log('Close basis sidebar button handler added');
     }
     
-    if (backdrop) {
-        backdrop.addEventListener('click', closeCitationPanel);
-        console.log('Backdrop handler added');
-    }
-    
-    // Add keyboard support for closing panel
+    // Add keyboard support for closing sidebar
     document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape') {
-            closeCitationPanel();
+            closeBasisSidebar();
         }
     });
 }
 
 
-function initializeSmoothScrolling() {
-    document.querySelectorAll('.toc-link').forEach(link => {
-        link.addEventListener('click', function(e) {
-            e.preventDefault();
-            const targetId = this.getAttribute('data-target');
-            const target = document.getElementById(targetId);
-            
-            if (target) {
-                // Update active state
-                document.querySelectorAll('.toc-link').forEach(l => l.classList.remove('active'));
-                this.classList.add('active');
-                
-                // Smooth scroll
-                target.scrollIntoView({ 
-                    behavior: 'smooth', 
-                    block: 'start',
-                    inline: 'nearest'
-                });
-            }
-        });
-    });
-    
-    // Update active TOC item on scroll
-    window.addEventListener('scroll', updateActiveTocItem);
-}
-
-function updateActiveTocItem() {
-    // Only track H1 and H2 headings for TOC highlighting
-    const headings = document.querySelectorAll('#report-content h1, #report-content h2');
-    const tocLinks = document.querySelectorAll('.toc-link');
-    
-    let activeHeading = null;
-    const scrollTop = window.pageYOffset;
-    
-    headings.forEach(heading => {
-        if (heading.offsetTop <= scrollTop + 100) {
-            activeHeading = heading;
-        }
-    });
-    
-    if (activeHeading) {
-        tocLinks.forEach(link => {
-            link.classList.remove('active');
-            if (link.getAttribute('data-target') === activeHeading.id) {
-                link.classList.add('active');
-            }
-        });
-    }
-}
 
 function copyReportUrl() {
     const url = window.location.href;
@@ -584,13 +499,13 @@ function showCitationDetails(citationId, url) {
         return;
     }
     
-    // Populate citation panel with basis data
-    const citationContent = document.getElementById('citation-content');
-    citationContent.innerHTML = `
+    // Populate basis sidebar with basis data
+    const basisBody = document.getElementById('basis-body');
+    basisBody.innerHTML = `
         <div class="citation-details">
             <div class="citation-url mb-3">
                 <h6>Source</h6>
-                <a href="${url}" target="_blank" class="text-break">
+                <a href="${url}" target="_blank">
                     <i class="fas fa-external-link-alt me-1"></i>
                     ${url}
                 </a>
@@ -601,7 +516,7 @@ function showCitationDetails(citationId, url) {
                     <h6>Key Excerpts</h6>
                     ${basisEntry.excerpts.map(excerpt => `
                         <blockquote class="blockquote-sm">
-                            <p class="mb-2">${excerpt}</p>
+                            <p>${excerpt}</p>
                         </blockquote>
                     `).join('')}
                 </div>
@@ -610,7 +525,7 @@ function showCitationDetails(citationId, url) {
             ${basisEntry.reasoning ? `
                 <div class="citation-reasoning mb-3">
                     <h6>Reasoning</h6>
-                    <p class="text-muted">${basisEntry.reasoning}</p>
+                    <p>${basisEntry.reasoning}</p>
                 </div>
             ` : ''}
             
@@ -625,9 +540,8 @@ function showCitationDetails(citationId, url) {
         </div>
     `;
     
-    // Show the panel
-    document.getElementById('citation-panel').classList.add('active');
-    document.getElementById('citation-backdrop').classList.add('active');
+    // Show the basis sidebar
+    document.querySelector('.report-layout').classList.add('basis-open');
 }
 
 function findBasisByUrl(url) {
@@ -700,9 +614,8 @@ function getConfidenceBadgeColor(confidence) {
     }
 }
 
-function closeCitationPanel() {
-    document.getElementById('citation-panel').classList.remove('active');
-    document.getElementById('citation-backdrop').classList.remove('active');
+function closeBasisSidebar() {
+    document.querySelector('.report-layout').classList.remove('basis-open');
 }
 
 function tryFindReferenceInRawContent(citationId) {
@@ -855,22 +768,23 @@ function manuallyProcessReferencesUnderHeading(referencesHeading) {
         
         console.log(`✅ Creating reference anchor for citation ${num}:`, text.substring(0, 100));
         
-        // Check if anchor already exists
+        // Check if anchor already exists to prevent duplicates
         const existing = document.getElementById(`citation-${num}`);
         if (existing) {
-            console.log(`⚠️ Anchor citation-${num} already exists, skipping`);
+            console.log(`⚠️ Anchor citation-${num} already exists, skipping duplicate creation`);
             continue;
         }
         
-        // Create anchor element and insert it after the heading
-        const refDiv = document.createElement('div');
-        refDiv.id = `citation-${num}`;
-        refDiv.className = 'citation-item';
-        refDiv.innerHTML = `<strong>[${num}]</strong> ${text}`;
-        
-        // Insert after the references heading
-        referencesHeading.parentNode.insertBefore(refDiv, referencesHeading.nextSibling);
-        console.log(`✅ Successfully created and inserted citation-${num}`);
+            // Create HIDDEN anchor element for JavaScript functionality only
+            const refDiv = document.createElement('div');
+            refDiv.id = `citation-${num}`;
+            refDiv.className = 'citation-item';
+            refDiv.style.display = 'none'; // Hidden from view but accessible to JavaScript
+            refDiv.innerHTML = `<strong>[${num}]</strong> ${text}`;
+            
+            // Insert as hidden element (anywhere in the DOM is fine since it's invisible)
+            document.body.appendChild(refDiv);
+            console.log(`✅ Successfully created HIDDEN citation anchor: citation-${num}`);
         citationCount++;
     }
     
@@ -945,147 +859,347 @@ window.addEventListener('afterprint', function() {
     }
 }
 
-/* Markdown content styling */
-.markdown-content {
-    line-height: 1.7;
-    font-size: 1.1rem;
-}
-
-.markdown-content h2 {
-    border-bottom: 2px solid var(--primary-color);
-    padding-bottom: 0.5rem;
-}
-
-.markdown-content h3 {
-    color: #495057;
-}
-
-.markdown-content ul {
+/* Additional content styling */
+.report-content ul {
     padding-left: 1.5rem;
 }
 
-.markdown-content li {
-    margin-bottom: 0.5rem;
+.report-content li {
+    margin-bottom: 0.75rem;
 }
 
-.markdown-content p {
-    text-align: justify;
+/* Fix number range formatting issues */
+.report-content em,
+.report-content strong {
+    font-weight: inherit; /* Prevent bold/italic from affecting number formatting */
 }
 
-/* Citation Panel Styles */
-.citation-panel {
-    position: fixed;
-    top: 0;
-    right: -400px;
-    width: 400px;
-    height: 100vh;
-    background: white;
-    box-shadow: -2px 0 10px rgba(0, 0, 0, 0.1);
-    z-index: 1050;
-    transition: right 0.3s ease;
+.report-content code {
+    font-style: normal; /* Ensure inline code doesn't get italicized */
+    font-weight: normal;
+    background: var(--gray-bg);
+    padding: 0.2rem 0.4rem;
+    border-radius: 3px;
+    font-size: 0.9em;
+}
+
+/* Hide citation anchor elements - they're only for JavaScript functionality */
+.citation-item {
+    display: none !important;
+    visibility: hidden !important;
+}
+
+/* Three Column Layout */
+.report-layout {
+    display: flex;
+    gap: 0;
+    height: calc(100vh - 160px);
+    border: 1px solid var(--light-border);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+/* Table of Contents Column */
+.toc-column {
+    width: 280px;
+    background: var(--gray-bg);
+    border-right: 1px solid var(--light-border);
+    flex-shrink: 0;
+}
+
+.toc-container {
+    padding: 1.5rem;
+    height: 100%;
     overflow-y: auto;
 }
 
-.citation-panel.active {
-    right: 0;
-}
-
-.citation-panel-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 1rem;
-    border-bottom: 1px solid #dee2e6;
-    background: #f8f9fa;
-}
-
-.citation-panel-body {
-    padding: 1rem;
-}
-
-.citation-backdrop {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100vh;
-    background: rgba(0, 0, 0, 0.3);
-    z-index: 1040;
-    opacity: 0;
-    visibility: hidden;
-    transition: opacity 0.3s ease, visibility 0.3s ease;
-}
-
-.citation-backdrop.active {
-    opacity: 1;
-    visibility: visible;
-}
-
-.citation-details h6 {
-    color: var(--primary-color);
-    font-size: 0.875rem;
+.toc-title {
     font-weight: 600;
+    color: var(--index-black);
+    margin-bottom: 1rem;
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.toc-nav ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.toc-nav li {
     margin-bottom: 0.5rem;
 }
 
-.citation-url a {
-    color: #495057;
+.toc-nav a {
+    display: block;
+    padding: 0.5rem 0.75rem;
+    color: var(--gray-text);
     text-decoration: none;
+    border-radius: 4px;
     font-size: 0.875rem;
+    line-height: 1.4;
+    transition: all 0.2s ease;
+}
+
+.toc-nav a:hover,
+.toc-nav a.active {
+    background: var(--signal);
+    color: white;
+}
+
+.toc-nav .toc-link-main {
+    font-weight: 500;
+    color: var(--index-black);
+}
+
+.toc-nav .toc-link-section {
+    padding-left: 1.25rem;
+    font-size: 0.8rem;
+}
+
+/* Report Content Column */
+.report-column {
+    flex: 1;
+    min-width: 0;
+}
+
+.report-container {
+    height: 100%;
+    overflow-y: auto;
+    padding: 2rem;
+    background: white;
+}
+
+.report-content {
+    max-width: none;
+    margin: 0;
+    padding: 0;
+}
+
+/* Basis Sidebar Column */
+.basis-column {
+    width: 0;
+    overflow: hidden;
+    background: var(--index-black);
+    border-left: 1px solid var(--light-border);
+    transition: width 0.3s ease;
+    flex-shrink: 0;
+}
+
+.report-layout.basis-open .basis-column {
+    width: 350px;
+}
+
+.basis-container {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.basis-header {
+    padding: 1.5rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.basis-header h6 {
+    color: white;
+    margin: 0;
+    font-weight: 500;
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.basis-header .btn-close {
+    filter: invert(1);
+    opacity: 0.8;
+}
+
+.basis-header .btn-close:hover {
+    opacity: 1;
+}
+
+.basis-body {
+    padding: 1.5rem;
+    overflow-y: auto;
+    flex: 1;
+    color: white;
+}
+
+/* Content Styling */
+.report-content h1 {
+    color: var(--signal);
+    font-size: 2rem;
+    font-weight: 500;
+    margin-bottom: 1.5rem;
+    line-height: 1.2;
+}
+
+.report-content h2 {
+    color: var(--signal);
+    font-size: 1.5rem;
+    font-weight: 500;
+    margin: 2rem 0 1rem 0;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid var(--signal);
+}
+
+.report-content h3 {
+    color: var(--index-black);
+    font-size: 1.25rem;
+    font-weight: 500;
+    margin: 1.5rem 0 1rem 0;
+}
+
+.report-content p {
+    line-height: 1.7;
+    margin-bottom: 1.2rem;
+    text-align: justify;
+}
+
+.report-content table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 2rem 0;
+    background: white;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.report-content table th {
+    background: var(--index-black);
+    color: white;
+    padding: 1rem;
+    text-align: left;
+    font-weight: 500;
+}
+
+.report-content table td {
+    padding: 1rem;
+    border-bottom: 1px solid var(--light-border);
+}
+
+.report-content table tr:hover {
+    background: var(--gray-bg);
+}
+
+/* Citation Links */
+.citation-link {
+    color: var(--signal);
+    text-decoration: none;
+    font-weight: 500;
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.citation-link:hover {
+    background: var(--signal);
+    color: white;
+}
+
+/* Citation Details in Sidebar */
+.citation-details {
+    color: white;
+}
+
+.citation-details h6 {
+    color: var(--signal);
+    margin-bottom: 0.8rem;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.citation-url a {
+    color: #ccc;
+    text-decoration: none;
+    font-size: 0.9rem;
+    word-break: break-all;
 }
 
 .citation-url a:hover {
-    color: var(--primary-color);
+    color: white;
     text-decoration: underline;
 }
 
 .blockquote-sm {
-    border-left: 3px solid var(--primary-color);
+    border-left: 3px solid var(--signal);
     padding-left: 1rem;
-    margin: 0.5rem 0;
-    background: #f8f9fa;
+    margin: 1rem 0;
+    background: rgba(255, 255, 255, 0.05);
     border-radius: 0 0.25rem 0.25rem 0;
 }
 
 .blockquote-sm p {
-    font-size: 0.875rem;
+    font-size: 0.9rem;
     line-height: 1.5;
-    margin-bottom: 0;
-    text-align: left;
+    margin: 0;
+    color: #ddd;
 }
 
 .citation-reasoning p {
-    font-size: 0.875rem;
+    font-size: 0.9rem;
+    color: #bbb;
     line-height: 1.5;
 }
 
-.citation-confidence {
-    padding-top: 0.5rem;
-    border-top: 1px solid #dee2e6;
-}
-
-/* Enhanced citation link styling */
-.citation-link {
-    color: var(--primary-color);
-    text-decoration: none;
-    font-weight: 500;
-    transition: all 0.2s ease;
-    padding: 0.1rem 0.2rem;
-    border-radius: 0.2rem;
-}
-
-.citation-link:hover {
-    background-color: var(--primary-color);
-    color: white;
-    text-decoration: none;
-    cursor: pointer;
-}
-
 /* Responsive design */
+@media (max-width: 1024px) {
+    .toc-column {
+        width: 220px;
+    }
+    
+    .report-layout.basis-open .basis-column {
+        width: 300px;
+    }
+}
+
 @media (max-width: 768px) {
-    .citation-panel {
+    .report-layout {
+        flex-direction: column;
+        height: calc(100vh - 120px);
+    }
+    
+    .toc-column {
         width: 100%;
-        right: -100%;
+        order: 3;
+        height: 150px;
+        flex-shrink: 0;
+    }
+    
+    .report-column {
+        order: 1;
+        flex: 1;
+        min-height: 0;
+    }
+    
+    .basis-column {
+        order: 2;
+        width: 100% !important;
+        height: 0;
+        transition: height 0.3s ease;
+    }
+    
+    .report-layout.basis-open .basis-column {
+        height: 250px;
+    }
+    
+    .report-container {
+        padding: 1rem;
+    }
+    
+    .toc-container,
+    .basis-body {
+        padding: 1rem;
     }
 }
 </style>
