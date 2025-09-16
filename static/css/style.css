@@ -1518,6 +1518,36 @@ footer {
     transition: all 0.3s ease;
 }
 
+/* Force proper row behavior for side-by-side layout */
+#main-content-row {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    margin-left: -15px;
+    margin-right: -15px;
+}
+
+/* Ensure columns behave properly */
+#form-column, #feed-column {
+    padding-left: 15px;
+    padding-right: 15px;
+    box-sizing: border-box;
+}
+
+/* Force side-by-side behavior when research is active */
+.research-active #main-content-row {
+    align-items: flex-start !important;
+}
+
+.research-active #form-column {
+    flex: 0 0 50% !important;
+    max-width: 50% !important;
+}
+
+.research-active #feed-column {
+    flex: 0 0 50% !important;
+    max-width: 50% !important;
+}
+
 /* When research is active, both containers should have similar height */
 .research-active .sse-feed-container {
     height: 750px;
@@ -1539,9 +1569,8 @@ footer {
 
 /* When research starts, form adjusts for side-by-side */
 .research-active #form-column {
-    max-width: none !important;
-    padding-right: 1rem;
     justify-content: flex-start;
+    padding-right: 1rem;
 }
 
 .research-active #feed-column {
@@ -1551,6 +1580,15 @@ footer {
 .research-active .form-section {
     max-width: none !important;
     margin: 0;
+    width: 100%;
+}
+
+/* Center the entire content area when research is active */
+.research-active .content-wrapper {
+    display: flex;
+    justify-content: center;
+    max-width: 1400px !important;
+    margin: 0 auto;
 }
 
 .form-section-title {
@@ -1892,27 +1930,36 @@ footer {
     font-size: 0.95rem;
 }
 
-/* Mobile responsiveness for side-by-side layout */
-@media (max-width: 991px) {
+/* Mobile responsiveness for side-by-side layout - only stack on very small screens */
+@media (max-width: 576px) {
     .content-wrapper {
-        max-width: 100%;
-        padding: 0 20px;
+        max-width: 100% !important;
+        padding: 0 20px !important;
     }
     
     .research-active .content-wrapper {
-        max-width: 100%;
-        padding: 0 20px;
+        max-width: 100% !important;
+        padding: 0 20px !important;
+        display: block !important;
     }
     
-    #form-column {
-        justify-content: center;
+    /* Force stacking on very small screens by making columns full width */
+    .research-active #main-content-row {
+        flex-direction: column !important;
     }
     
     .research-active #form-column,
     .research-active #feed-column {
+        flex: 0 0 100% !important;
+        max-width: 100% !important;
         padding-left: 15px;
         padding-right: 15px;
         justify-content: flex-start;
+        margin-bottom: 1rem;
+    }
+    
+    #form-column {
+        justify-content: center;
     }
     
     .form-section {
@@ -1927,9 +1974,8 @@ footer {
     .sse-feed {
         height: 350px;
     }
-}
-
-@media (max-width: 768px) {
+    
+    /* Additional mobile styles for very small screens */
     .form-section,
     .sse-feed-container {
         padding: 1rem;

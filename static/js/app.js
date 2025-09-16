@@ -880,7 +880,7 @@ const App = {
         const heroSection = document.querySelector('.hero-section');
         
         if (mainContentRow && formColumn && feedColumn) {
-            // Add research-active class for CSS transitions
+            // Add research-active class for CSS transitions and flexbox behavior
             mainContentRow.classList.add('research-active');
             if (contentWrapper) {
                 contentWrapper.classList.add('research-active');
@@ -889,12 +889,22 @@ const App = {
                 heroSection.classList.add('research-active');
             }
             
-            // Change form column from col-12 to col-lg-6 (give more space to feed)
-            formColumn.className = 'col-lg-6';
+            // Remove existing Bootstrap classes and set explicit classes
+            formColumn.className = 'col-6';
+            formColumn.classList.add('research-form-column');
             
-            // Show and set feed column to col-lg-6 (equal split for more feed space)
-            feedColumn.className = 'col-lg-6';
+            // Show and set feed column with explicit classes
+            feedColumn.className = 'col-6';
+            feedColumn.classList.add('research-feed-column');
             feedColumn.classList.remove('d-none');
+            
+            // Force immediate layout update
+            mainContentRow.style.display = 'flex';
+            mainContentRow.style.flexWrap = 'wrap';
+            formColumn.style.flex = '0 0 50%';
+            formColumn.style.maxWidth = '50%';
+            feedColumn.style.flex = '0 0 50%';
+            feedColumn.style.maxWidth = '50%';
         }
         
         // Set up the SSE feed
