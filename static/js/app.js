@@ -938,17 +938,18 @@ const App = {
         
         if (!sourcesSection) return;
         
-        // Show the sources section if it's hidden
-        if (sourcesSection.classList.contains('d-none')) {
-            sourcesSection.classList.remove('d-none');
-        }
-        
         // Update numbers
         if (data.sources_processed !== undefined && sourcesRead) {
             sourcesRead.textContent = data.sources_processed;
         }
         if (data.sources_total !== undefined && sourcesConsidered) {
             sourcesConsidered.textContent = data.sources_total;
+        }
+        
+        // Only show the sources section if sources have been processed (sources_read > 0)
+        const currentSourcesRead = parseInt(sourcesRead?.textContent || '0', 10);
+        if (currentSourcesRead > 0 && sourcesSection.classList.contains('d-none')) {
+            sourcesSection.classList.remove('d-none');
         }
         
         // Update recent sources list
@@ -977,7 +978,13 @@ const App = {
         });
         
         // Ensure message is a string and not undefined/null
-        const displayMessage = message || 'No message';
+        const rawMessage = message || 'No message';
+        
+        // Truncate message if too long (max 150 characters)
+        const maxLength = 500;
+        const displayMessage = rawMessage.length > maxLength 
+            ? rawMessage.substring(0, maxLength) + '...'
+            : rawMessage;
         
         eventElement.innerHTML = `
             <div class="sse-event-time">${timeString}</div>

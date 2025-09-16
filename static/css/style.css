@@ -1454,6 +1454,18 @@ footer {
     transition: all 0.3s ease;
 }
 
+/* When research is active, both containers should have similar height */
+.research-active .sse-feed-container {
+    height: 750px;
+    max-height: 750px;
+}
+
+.research-active .form-section {
+    height: 750px;
+    max-height: 750px;
+    overflow-y: auto;
+}
+
 /* When research starts, form adjusts for side-by-side */
 .research-active #form-column {
     max-width: none !important;
@@ -1490,6 +1502,14 @@ footer {
     top: 2rem;
     box-sizing: border-box;
     width: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Force proper height when research is active */
+.research-active .sse-feed-container {
+    height: 750px !important;
+    max-height: 750px !important;
 }
 
 .sse-header {
@@ -1512,13 +1532,13 @@ footer {
 }
 
 .sse-feed {
-    min-height: 500px;
-    max-height: 600px;
+    flex: 1;
     overflow-y: auto;
     padding: 1rem;
     background: white;
     font-size: 0.75rem;
     box-sizing: border-box;
+    height: 0; /* This forces the flex item to shrink and enable scrolling */
 }
 
 .sse-placeholder {
@@ -1541,9 +1561,9 @@ footer {
     box-sizing: border-box;
     min-height: auto;
     overflow: hidden;
-    background: rgba(255, 255, 255, 0.5);
+    background: var(--gray-bg);
     border-radius: 4px;
-    border: 1px solid rgba(0,0,0,0.03);
+    border: 1px solid var(--light-border);
     position: relative;
     clear: both;
     contain: layout;
