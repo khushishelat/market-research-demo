@@ -34,9 +34,38 @@ client = Parallel(api_key=PARALLEL_API_KEY)
 
 # Configuration
 MAX_REPORTS_PER_HOUR = 100  # Global rate limit: 100 reports per hour
-DATABASE_URL = os.getenv('POSTGRES_URL') or os.getenv('DATABASE_URL')
+
+# Try different Supabase connection URLs in order of preference
+DATABASE_URL = (
+    os.getenv('POSTGRES_URL_NON_POOLING') or  # Best for serverless
+    os.getenv('POSTGRES_URL') or 
+    os.getenv('DATABASE_URL')
+)
+
 if not DATABASE_URL:
-    raise ValueError("POSTGRES_URL or DATABASE_URL not found in environment variables")
+    raise ValueError("No PostgreSQL URL found in environment variables")
+
+# Clean the URL to remove unsupported query parameters
+def clean_database_url(url):
+    """Remove query parameters that psycopg2 doesn't support"""
+    if '?' in url:
+        base_url, query_string = url.split('?', 1)
+        # Parse query parameters
+        import urllib.parse
+        params = urllib.parse.parse_qs(query_string)
+        
+        # Keep only psycopg2-supported parameters
+        supported_params = ['sslmode', 'connect_timeout', 'application_name']
+        clean_params = {k: v for k, v in params.items() if k in supported_params}
+        
+        if clean_params:
+            clean_query = urllib.parse.urlencode(clean_params, doseq=True)
+            return f"{base_url}?{clean_query}"
+        else:
+            return base_url
+    return url
+
+DATABASE_URL = clean_database_url(DATABASE_URL)
 
 # Initialize connection pool
 connection_pool = None
@@ -93,12 +122,12 @@ def get_recent_report_count():
     
     # Get count of reports in the last hour
     one_hour_ago = datetime.datetime.now() - datetime.timedelta(hours=1)
-    cursor.execute('SELECT COUNT(*) FROM rate_limit WHERE created_at > %s', (one_hour_ago,))
+    cursor.execute('SELECT COUNT(*) as count FROM rate_limit WHERE created_at > %s', (one_hour_ago,))
     result = cursor.fetchone()
     
     cursor.close()
     conn.close()
-    return result[0] if result else 0
+    return result['count'] if result else 0
 
 def record_report_generation():
     """Record a new report generation for global rate limiting"""
@@ -196,7 +225,7 @@ def save_report(title, slug, industry, geography, details, content, basis=None, 
                 print(f"Report already exists for task {task_run_id}, skipping duplicate save")
                 cursor.close()
                 conn.close()
-                return existing_report[0]
+                return existing_report['id']
         
         report_id = str(uuid.uuid4())
         
@@ -267,22 +296,22 @@ def get_report_by_slug(slug):
     if result:
         # Parse basis JSON if it exists
         basis_data = None
-        if result[6]:  # basis column
+        if result['basis']:  # basis column
             try:
-                basis_data = json.loads(result[6])
+                basis_data = json.loads(result['basis'])
             except (json.JSONDecodeError, TypeError):
                 basis_data = None
                 
         return {
-            'id': result[0],
-            'title': result[1],
-            'industry': result[2],
-            'geography': result[3],
-            'details': result[4],
-            'content': result[5],
+            'id': result['id'],
+            'title': result['title'],
+            'industry': result['industry'],
+            'geography': result['geography'],
+            'details': result['details'],
+            'content': result['content'],
             'basis': basis_data,
-            'created_at': result[7],
-            'task_run_id': result[8],
+            'created_at': result['created_at'],
+            'task_run_id': result['task_run_id'],
             'slug': slug
         }
     return None
@@ -303,12 +332,12 @@ def get_all_public_reports():
     conn.close()
     
     return [{
-        'id': row[0],
-        'title': row[1],
-        'slug': row[2],
-        'industry': row[3],
-        'geography': row[4],
-        'created_at': row[5]
+        'id': row['id'],
+        'title': row['title'],
+        'slug': row['slug'],
+        'industry': row['industry'],
+        'geography': row['geography'],
+        'created_at': row['created_at']
     } for row in results]
 
 
