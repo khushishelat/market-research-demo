@@ -2,7 +2,6 @@ import os
 import json
 import uuid
 import datetime
-import sqlite3
 import re
 import requests
 import threading
@@ -12,6 +11,10 @@ from flask import Flask, render_template, request, jsonify, redirect, url_for, s
 from werkzeug.utils import secure_filename
 import tempfile
 from dotenv import load_dotenv
+import psycopg2
+from psycopg2.extras import RealDictCursor
+from psycopg2 import pool
+import urllib.parse
 
 from parallel import Parallel
 from parallel.types import TaskSpecParam
@@ -25,22 +28,31 @@ app.secret_key = os.getenv('SECRET_KEY', 'your-secret-key-here')
 # Initialize Parallel client
 PARALLEL_API_KEY = os.getenv('PARALLEL_API_KEY')
 if not PARALLEL_API_KEY:
-    raise ValueError("PARALLEL_API_KEY not found in .env.local file")
+    raise ValueError("PARALLEL_API_KEY not found in environment variables")
 
 client = Parallel(api_key=PARALLEL_API_KEY)
 
 # Configuration
 MAX_REPORTS_PER_HOUR = 100  # Global rate limit: 100 reports per hour
-DATABASE_PATH = 'market_research.db'
+DATABASE_URL = os.getenv('POSTGRES_URL') or os.getenv('DATABASE_URL')
+if not DATABASE_URL:
+    raise ValueError("POSTGRES_URL or DATABASE_URL not found in environment variables")
+
+# Initialize connection pool
+connection_pool = None
 
 # In-memory task tracking for background monitoring
 active_tasks = {}  # {task_run_id: {'metadata': task_metadata, 'thread': thread_obj}}
 completed_tasks = set()  # Track completed tasks to prevent duplicate processing
 
 
+def get_db_connection():
+    """Get a database connection"""
+    return psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+
 def init_database():
-    """Initialize SQLite database for storing reports and global rate limiting"""
-    conn = sqlite3.connect(DATABASE_PATH)
+    """Initialize PostgreSQL database for storing reports and global rate limiting"""
+    conn = get_db_connection()
     cursor = conn.cursor()
     
     # Create reports table (simplified for anonymous users)
@@ -56,7 +68,7 @@ def init_database():
             basis TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             status TEXT DEFAULT 'completed',
-            is_public INTEGER DEFAULT 1,
+            is_public BOOLEAN DEFAULT TRUE,
             task_run_id TEXT
         )
     ''')
@@ -64,36 +76,39 @@ def init_database():
     # Global rate limiting table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS rate_limit (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
     
     conn.commit()
+    cursor.close()
     conn.close()
 
 
 def get_recent_report_count():
     """Get the number of reports generated in the last hour (global rate limiting)"""
-    conn = sqlite3.connect(DATABASE_PATH)
+    conn = get_db_connection()
     cursor = conn.cursor()
     
     # Get count of reports in the last hour
     one_hour_ago = datetime.datetime.now() - datetime.timedelta(hours=1)
-    cursor.execute('SELECT COUNT(*) FROM rate_limit WHERE created_at > ?', (one_hour_ago,))
+    cursor.execute('SELECT COUNT(*) FROM rate_limit WHERE created_at > %s', (one_hour_ago,))
     result = cursor.fetchone()
     
+    cursor.close()
     conn.close()
     return result[0] if result else 0
 
 def record_report_generation():
     """Record a new report generation for global rate limiting"""
-    conn = sqlite3.connect(DATABASE_PATH)
+    conn = get_db_connection()
     cursor = conn.cursor()
     
     cursor.execute('INSERT INTO rate_limit DEFAULT VALUES')
     
     conn.commit()
+    cursor.close()
     conn.close()
 
 def create_slug(title):
@@ -107,16 +122,17 @@ def create_slug(title):
     base_slug = slug
     counter = 1
     
-    conn = sqlite3.connect(DATABASE_PATH)
+    conn = get_db_connection()
     cursor = conn.cursor()
     
     while True:
-        cursor.execute('SELECT id FROM reports WHERE slug = ?', (slug,))
+        cursor.execute('SELECT id FROM reports WHERE slug = %s', (slug,))
         if not cursor.fetchone():
             break
         slug = f"{base_slug}-{counter}"
         counter += 1
     
+    cursor.close()
     conn.close()
     return slug
 
@@ -168,16 +184,17 @@ def convert_basis_to_dict(basis):
 
 def save_report(title, slug, industry, geography, details, content, basis=None, task_run_id=None):
     """Save report to database with atomic duplicate prevention"""
-    conn = sqlite3.connect(DATABASE_PATH)
+    conn = get_db_connection()
     cursor = conn.cursor()
     
     try:
         # First check if a report already exists for this task_run_id
         if task_run_id:
-            cursor.execute('SELECT id FROM reports WHERE task_run_id = ?', (task_run_id,))
+            cursor.execute('SELECT id FROM reports WHERE task_run_id = %s', (task_run_id,))
             existing_report = cursor.fetchone()
             if existing_report:
                 print(f"Report already exists for task {task_run_id}, skipping duplicate save")
+                cursor.close()
                 conn.close()
                 return existing_report[0]
         
@@ -195,14 +212,14 @@ def save_report(title, slug, industry, geography, details, content, basis=None, 
         
         cursor.execute('''
             INSERT INTO reports (id, title, slug, industry, geography, details, content, basis, is_public, task_run_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
-        ''', (report_id, title, slug, industry, geography, details, content, basis_json, task_run_id))
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ''', (report_id, title, slug, industry, geography, details, content, basis_json, True, task_run_id))
         
         conn.commit()
         print(f"Successfully saved new report {report_id} for task {task_run_id}")
         return report_id
         
-    except sqlite3.IntegrityError as e:
+    except psycopg2.IntegrityError as e:
         # Handle case where slug already exists (create new slug)
         if "slug" in str(e).lower():
             # Generate new slug and retry
@@ -210,7 +227,7 @@ def save_report(title, slug, industry, geography, details, content, basis=None, 
             counter = 1
             while True:
                 new_slug = f"{base_slug}-{counter}"
-                cursor.execute('SELECT id FROM reports WHERE slug = ?', (new_slug,))
+                cursor.execute('SELECT id FROM reports WHERE slug = %s', (new_slug,))
                 if not cursor.fetchone():
                     slug = new_slug
                     break
@@ -219,27 +236,32 @@ def save_report(title, slug, industry, geography, details, content, basis=None, 
             # Retry with new slug
             cursor.execute('''
                 INSERT INTO reports (id, title, slug, industry, geography, details, content, basis, is_public, task_run_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
-            ''', (report_id, title, slug, industry, geography, details, content, basis_json, task_run_id))
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ''', (report_id, title, slug, industry, geography, details, content, basis_json, True, task_run_id))
             conn.commit()
             print(f"Successfully saved report {report_id} with adjusted slug {slug} for task {task_run_id}")
             return report_id
         else:
             raise e
+    except Exception as e:
+        conn.rollback()
+        raise e
     finally:
+        cursor.close()
         conn.close()
 
 def get_report_by_slug(slug):
     """Get report by slug (public access)"""
-    conn = sqlite3.connect(DATABASE_PATH)
+    conn = get_db_connection()
     cursor = conn.cursor()
     
     cursor.execute('''
         SELECT id, title, industry, geography, details, content, basis, created_at, task_run_id
-        FROM reports WHERE slug = ? AND is_public = 1
-    ''', (slug,))
+        FROM reports WHERE slug = %s AND is_public = %s
+    ''', (slug, True))
     
     result = cursor.fetchone()
+    cursor.close()
     conn.close()
     
     if result:
@@ -267,16 +289,17 @@ def get_report_by_slug(slug):
 
 def get_all_public_reports():
     """Get all public reports for the library"""
-    conn = sqlite3.connect(DATABASE_PATH)
+    conn = get_db_connection()
     cursor = conn.cursor()
     
     cursor.execute('''
         SELECT id, title, slug, industry, geography, created_at
-        FROM reports WHERE is_public = 1
+        FROM reports WHERE is_public = %s
         ORDER BY created_at DESC
-    ''', ())
+    ''', (True,))
     
     results = cursor.fetchall()
+    cursor.close()
     conn.close()
     
     return [{
@@ -957,9 +980,12 @@ def api_status():
         'login_required': False
     })
 
-if __name__ == '__main__':
-    # Initialize database
+# Initialize database on import for serverless deployment
+try:
     init_database()
-    
-    # Run the application
+except Exception as e:
+    print(f"Database initialization error: {e}")
+
+if __name__ == '__main__':
+    # Run the application locally
     app.run(debug=True, host='0.0.0.0', port=5000)
