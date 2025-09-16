@@ -6,72 +6,130 @@
 <!-- Hero Section -->
 <div class="hero-section">
     <div class="centered-content">
-        <h1 class="hero-title gerstner">AI-powered market research built for speed and precision</h1>
+        <h1 class="hero-title gerstner">Accurate, AI-powered Market Research direct to your inbox</h1>
         <p class="hero-subtitle">
-            Generate comprehensive market analysis with citations, competitive intelligence, and actionable insights. Powered by Parallel's deep research technology.
+            Generate a multi-page market research report on any industry, with comprehensive in-line citations, reasoning and excerpts. Powered by Parallel Deep Research.
         </p>
         
-        <!-- Research Form -->
+        <!-- Research Form - Dynamic Layout -->
         <div class="content-wrapper">
-            <form id="research-form" class="research-form">
-                <!-- Industry and Geography Row -->
-                <div class="row mb-4">
-                    <div class="col-md-6">
-                        <label for="industry" class="form-label stat-label">Industry *</label>
-                        <input type="text" class="form-control form-control-lg" id="industry" 
-                               placeholder="e.g., HVAC, SaaS, Electric Vehicles" required>
-                    </div>
-                    <div class="col-md-6">
-                        <label for="geography" class="form-label stat-label">Geography</label>
-                        <select class="form-select form-select-lg" id="geography">
-                            <option value="">Select country or region</option>
-                            <option value="Global">Global</option>
-                            <option value="United States">United States</option>
-                            <option value="Canada">Canada</option>
-                            <option value="United Kingdom">United Kingdom</option>
-                            <option value="Europe">Europe</option>
-                            <option value="Germany">Germany</option>
-                            <option value="France">France</option>
-                            <option value="Japan">Japan</option>
-                            <option value="China">China</option>
-                            <option value="India">India</option>
-                            <option value="Australia">Australia</option>
-                            <option value="Brazil">Brazil</option>
-                            <option value="Other">Other (will default to global)</option>
-                        </select>
-                    </div>
-                </div>
+            <div class="row" id="main-content-row">
+                <!-- Form Column -->
+                <div class="col-12" id="form-column">
+                    <div class="form-section" id="form-section">
+                        <h3 class="form-section-title">Form</h3>
+                        <form id="research-form" class="research-form">
+                            <!-- Industry and Geography Row -->
+                            <div class="row mb-4">
+                                <div class="col-md-6">
+                                    <label for="industry" class="form-label stat-label">Industry *</label>
+                                    <input type="text" class="form-control form-control-lg" id="industry" 
+                                           placeholder="e.g., HVAC, SaaS, Electric Vehicles" required>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="geography" class="form-label stat-label">Geography</label>
+                                    <select class="form-select form-select-lg" id="geography">
+                                        <option value="">Select country or region</option>
+                                        <option value="Global">Global</option>
+                                        <option value="United States">United States</option>
+                                        <option value="Canada">Canada</option>
+                                        <option value="United Kingdom">United Kingdom</option>
+                                        <option value="Europe">Europe</option>
+                                        <option value="Germany">Germany</option>
+                                        <option value="France">France</option>
+                                        <option value="Japan">Japan</option>
+                                        <option value="China">China</option>
+                                        <option value="India">India</option>
+                                        <option value="Australia">Australia</option>
+                                        <option value="Brazil">Brazil</option>
+                                        <option value="Other">Other (will default to global)</option>
+                                    </select>
+                                </div>
+                            </div>
 
-                <!-- Research Focus Input -->
-                <div class="mb-4">
-                    <label for="details" class="form-label stat-label">Research Focus</label>
-                    <textarea class="form-control" id="details" rows="5" 
-                              placeholder="Describe the ideal market research report or any specific details you'd like to include in your report..."></textarea>
-                </div>
+                            <!-- Research Focus Input -->
+                            <div class="mb-4">
+                                <label for="details" class="form-label stat-label">Research Focus</label>
+                                <textarea class="form-control" id="details" rows="5" 
+                                          placeholder="Describe the ideal market research report or any specific details you'd like to include in your report..."></textarea>
+                            </div>
 
-                <!-- Submit Button -->
-                <div class="d-grid">
-                    <button type="submit" class="btn btn-primary btn-lg" id="generate-btn" 
-                            {% if recent_report_count >= max_reports_per_hour %}disabled{% endif %}>
-                        <i class="fas fa-chart-line me-2"></i>
-                        <span class="btn-text">Deep Research - Generate comprehensive market research report</span>
-                        <span class="spinner-border spinner-border-sm ms-2 d-none" role="status"></span>
-                    </button>
-                    {% if recent_report_count >= max_reports_per_hour %}
-                    <div class="alert alert-warning mt-3">
-                        <i class="fas fa-exclamation-triangle me-2"></i>
-                        Rate limit reached: {{ max_reports_per_hour }} reports per hour globally. Please try again later.
+                            <!-- Submit Button -->
+                            <div class="d-grid">
+                                <button type="submit" class="btn btn-primary btn-lg" id="generate-btn" 
+                                        {% if recent_report_count >= max_reports_per_hour %}disabled{% endif %}>
+                                    <i class="fas fa-rocket me-2"></i>
+                                    <span class="btn-text">Launch AI-Powered Deep Research</span>
+                                    <span class="spinner-border spinner-border-sm ms-2 d-none" role="status"></span>
+                                </button>
+                                {% if recent_report_count >= max_reports_per_hour %}
+                                <div class="alert alert-warning mt-3">
+                                    <i class="fas fa-exclamation-triangle me-2"></i>
+                                    Rate limit reached: {{ max_reports_per_hour }} reports per hour globally. Please try again later.
+                                </div>
+                                {% endif %}
+                            </div>
+
+                            <!-- Keyboard shortcut hint -->
+                            <div class="text-center mt-3">
+                                <small class="text-muted">
+                                    Press <kbd>⌘</kbd> + <kbd>Enter</kbd> to launch research instantly
+                                </small>
+                            </div>
+                        </form>
                     </div>
-                    {% endif %}
                 </div>
-
-                <!-- Keyboard shortcut hint -->
-                <div class="text-center mt-3">
-                    <small class="text-muted">
-                        Press <kbd>⌘</kbd> + <kbd>Enter</kbd> to generate report with all information above
-                    </small>
+                
+                <!-- Right Column: SSE Feed (Initially Hidden) -->
+                <div class="col-lg-6 d-none" id="feed-column">
+                    <div class="sse-feed-container" id="sse-feed-container">
+                        <div class="sse-header">
+                            <div class="sse-status" id="sse-status">Generating Report...</div>
+                        </div>
+                        
+                        <!-- Dedicated Sources Section -->
+                        <div class="sse-sources-section d-none" id="sse-sources-section">
+                            <div class="sources-container">
+                                <div class="sources-stats">
+                                    <div class="sources-stat">
+                                        <span class="sources-number" id="sources-read">0</span>
+                                        <span class="sources-label">pages read</span>
+                                    </div>
+                                    <div class="sources-stat">
+                                        <span class="sources-number" id="sources-considered">0</span>
+                                        <span class="sources-label">pages considered</span>
+                                    </div>
+                                </div>
+                                <div class="sse-recent-sources">
+                                    <ul class="sources-list" id="recent-sources-list">
+                                        <!-- Sources will be populated dynamically -->
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="sse-feed" id="sse-feed">
+                            <div class="sse-placeholder">
+                                Scrollable event feed from SSE
+                            </div>
+                        </div>
+                        
+                        <div class="sse-footer">
+                            <div class="sse-notice">Feel free to leave this page, or explore generated reports below.</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Completion State -->
+                    <div class="sse-completion d-none" id="sse-completion">
+                        <div class="sse-header">
+                            <div class="sse-status completed">Report completed!</div>
+                        </div>
+                        <div class="sse-actions">
+                            <a href="#" class="btn btn-primary" id="view-report-btn">View report now</a>
+                        </div>
+                    </div>
                 </div>
-            </form>
+            </div>
         </div>
 
         <div class="text-center mt-3">
@@ -95,10 +153,11 @@
     </div>
 </div>
 
-<!-- Popular Analyses Section -->
-<div class="popular-analyses">
+<!-- Library Section -->
+<div class="library-section">
     <div class="container">
-        <h2 class="section-title">Popular Analyses</h2>
+        <h2 class="section-title">Library</h2>
+        <p class="library-subtitle">Explore recently generated market research reports</p>
         
         {% if public_reports %}
         <div class="analyses-grid">
@@ -281,28 +340,8 @@
         {% endif %}
     </div>
 </div>
-
-
-<!-- Progress Area -->
-<div id="progress-area" class="d-none">
-    <div class="centered-content">
-        <div class="card border-0 shadow-custom" style="background-color: var(--primary-light);">
-            <div class="card-body text-center">
-                <div class="spinner-border text-orange mb-3" role="status">
-                    <span class="visually-hidden">Loading...</span>
-                </div>
-                <h5 class="card-title">Generating Market Research Report</h5>
-                <p class="card-text">
-                    Our AI is conducting deep research on your market. This may take a few minutes...
-                </p>
-                <div class="progress">
-                    <div class="progress-bar progress-bar-striped progress-bar-animated" 
-                         role="progressbar" style="width: 100%"></div>
-                </div>
-            </div>
-        </div>
-    </div>
 </div>
+
 
 <!-- Success Modal -->
 <div class="modal fade" id="successModal" tabindex="-1">

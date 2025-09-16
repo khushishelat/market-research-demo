@@ -159,7 +159,7 @@ const App = {
     // Set loading state
     setLoadingState(isLoading) {
         const generateBtn = document.getElementById('generate-btn');
-        const progressArea = document.getElementById('progress-area');
+        const activityFeedSection = document.getElementById('activity-feed-section');
         const spinner = generateBtn?.querySelector('.spinner-border');
         const btnText = generateBtn?.querySelector('.btn-text');
         
@@ -168,17 +168,18 @@ const App = {
         if (isLoading) {
             generateBtn.disabled = true;
             spinner?.classList.remove('d-none');
-            if (btnText) btnText.textContent = 'Generating Report...';
-            progressArea?.classList.remove('d-none');
+            if (btnText) btnText.textContent = 'Launching AI Research...';
             
-            // Add progress animation
-            this.animateProgress();
+            // Always show streaming UI when loading starts
+            this.showStreamingUI();
             
         } else {
             generateBtn.disabled = false;
             spinner?.classList.add('d-none');
-            if (btnText) btnText.textContent = 'Deep Research - Generate comprehensive market research report';
-            progressArea?.classList.add('d-none');
+            if (btnText) btnText.textContent = 'Launch AI-Powered Deep Research';
+            
+            // Keep activity feed visible after completion
+            // Don't hide it automatically - user can scroll away
         }
     },
     
@@ -220,6 +221,27 @@ const App = {
             this._reconnectTimeout = null;
         }
         
+        // Add completion event to SSE feed
+        this.addSSEEvent('Research completed successfully!', 'status');
+        
+        // Hide the generating container and show completion
+        const sseFeedContainer = document.getElementById('sse-feed-container');
+        const sseCompletion = document.getElementById('sse-completion');
+        const viewReportBtn = document.getElementById('view-report-btn');
+        
+        if (sseFeedContainer) {
+            sseFeedContainer.classList.add('d-none');
+        }
+        
+        if (sseCompletion && viewReportBtn) {
+            viewReportBtn.href = response.url;
+            sseCompletion.classList.remove('d-none');
+        }
+        
+        // Update user status
+        this.updateUserStatus();
+        
+        // Set up modal as fallback but don't show it immediately
         const reportLinks = document.getElementById('report-links');
         if (reportLinks) {
             reportLinks.innerHTML = `
@@ -234,12 +256,6 @@ const App = {
                 </button>
             `;
         }
-        
-        const successModal = new bootstrap.Modal(document.getElementById('successModal'));
-        successModal.show();
-        
-        // Update user status
-        this.updateUserStatus();
     },
     
     // Show error modal
@@ -504,7 +520,7 @@ const App = {
         // Reset reconnection attempts on successful event reception
         this.reconnectAttempts = 0;
         
-        const { type, category } = eventData;
+        const { type, category, message } = eventData;
         
         switch (type) {
             case 'task.status':
@@ -549,7 +565,7 @@ const App = {
         const { sources_processed, sources_total, message, recent_sources } = eventData;
         
         this.updateStreamingProgress({
-            message: message,
+            message: message || `Processed ${sources_processed || 0} of ${sources_total || 0} sources`,
             event_type: 'progress_stats',
             sources_processed: sources_processed,
             sources_total: sources_total,
@@ -559,11 +575,14 @@ const App = {
     
     // Handle log messages
     handleTaskLogEvent(eventData) {
-        const { message, log_level } = eventData;
+        const { message, log_level, recent_sources, sources_processed, sources_total } = eventData;
         
         this.updateStreamingProgress({
-            message: message,
-            event_type: `log.${log_level}`
+            message: message || 'Processing...',
+            event_type: `log.${log_level || 'info'}`,
+            recent_sources: recent_sources,
+            sources_processed: sources_processed,
+            sources_total: sources_total
         });
     },
     
@@ -659,10 +678,10 @@ const App = {
             const waitTime = Math.min(Math.pow(2, this.reconnectAttempts), 30) * 1000;
             
             this.updateConnectionStatus('reconnecting', this.reconnectAttempts);
-            this.updateStreamingProgress({
-                message: `Connection lost. Reconnecting in ${waitTime/1000}s... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`,
-                event_type: 'reconnecting'
-            });
+            this.addSSEEvent(
+                `Connection interrupted. Reconnecting in ${waitTime/1000}s... (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`,
+                'status'
+            );
             
             this._reconnectTimeout = setTimeout(() => {
                 if (!this.isTaskComplete) {
@@ -671,10 +690,10 @@ const App = {
             }, waitTime);
         } else {
             console.log('Max reconnection attempts reached, falling back to robust monitoring');
-            this.updateStreamingProgress({
-                message: 'Connection issues detected. Checking if task completed in background...',
-                event_type: 'robust_monitoring'
-            });
+            this.addSSEEvent(
+                'Live feed unavailable. Switching to background monitoring to track completion...',
+                'status'
+            );
             this.startRobustMonitoring(taskRunId);
         }
     },
@@ -685,10 +704,10 @@ const App = {
         
         console.log('Starting robust monitoring fallback for task:', taskRunId);
         this.updateConnectionStatus('monitoring');
-        this.updateStreamingProgress({
-            message: 'Using robust monitoring to track completion...',
-            event_type: 'robust_monitoring'
-        });
+        this.addSSEEvent(
+            'Using advanced monitoring to track your research progress...',
+            'status'
+        );
         
         try {
             const response = await fetch(`/monitor-task/${taskRunId}`, {
@@ -714,27 +733,10 @@ const App = {
     
     // Show connection lost UI with manual check option
     showConnectionLostUI(taskRunId) {
-        this.updateStreamingProgress({
-            message: 'Connection lost, but your task is still running in the background. Click "Check Status" to see if it completed.',
-            event_type: 'connection_lost'
-        });
-        
-        // Add a manual check button to the progress area
-        const progressArea = document.getElementById('progress-area');
-        if (progressArea) {
-            const existingBtn = progressArea.querySelector('.manual-check-btn');
-            if (!existingBtn) {
-                const checkBtn = document.createElement('button');
-                checkBtn.className = 'btn btn-outline-primary mt-3 manual-check-btn';
-                checkBtn.innerHTML = '<i class="fas fa-sync-alt me-2"></i>Check Status';
-                checkBtn.onclick = () => this.manualStatusCheck(taskRunId);
-                
-                const cardBody = progressArea.querySelector('.card-body');
-                if (cardBody) {
-                    cardBody.appendChild(checkBtn);
-                }
-            }
-        }
+        this.addSSEEvent(
+            'Connection lost, but research continues in background. Checking for updates...',
+            'error'
+        );
         
         // Start periodic status checking every 30 seconds
         this.startPeriodicStatusCheck(taskRunId);
@@ -802,19 +804,19 @@ const App = {
                 this.showErrorModal(`Task completed with status: ${statusResult.status}`);
             } else {
                 // Task still running, try to reconnect to stream
-                this.updateStreamingProgress({
-                    message: 'Task is still running. Attempting to reconnect...',
-                    event_type: 'reconnecting'
-                });
+                this.addSSEEvent(
+                    'Research is still in progress. Attempting to reconnect to live feed...',
+                    'status'
+                );
                 this.reconnectAttempts = 0; // Reset attempts
                 this.connectToStreamRobust(taskRunId);
             }
         } catch (error) {
             console.error('Manual status check failed:', error);
-            this.updateStreamingProgress({
-                message: 'Status check failed. Your task may still be running. Try again in a moment.',
-                event_type: 'error'
-            });
+            this.addSSEEvent(
+                'Status check failed. Your research may still be running. Try again in a moment.',
+                'error'
+            );
         } finally {
             if (checkBtn) {
                 checkBtn.innerHTML = '<i class="fas fa-sync-alt me-2"></i>Check Status';
@@ -849,85 +851,149 @@ const App = {
         this.stopPollingFallback();
     },
     
-    // Show streaming UI
+    // Show streaming UI with dynamic layout change
     showStreamingUI() {
-        const progressArea = document.getElementById('progress-area');
-        if (progressArea) {
-            progressArea.classList.remove('d-none');
-            
-            // Update progress area for streaming
-            const cardBody = progressArea.querySelector('.card-body');
-            if (cardBody) {
-                cardBody.innerHTML = `
-                    <div class="spinner-border text-orange mb-3" role="status">
-                        <span class="visually-hidden">Loading...</span>
-                    </div>
-                    <h5 class="card-title">Generating Market Research Report</h5>
-                    <p class="card-text">
-                        Our AI is conducting deep research on your market...
-                    </p>
-                    <div class="streaming-updates">
-                        <div class="stream-message mb-2">
-                            <strong>Status:</strong> <span id="current-status">Starting research...</span>
-                        </div>
-                        <div class="stream-event mb-2">
-                            <strong>Event:</strong> <span id="current-event">task_run.state</span>
-                        </div>
-                        <div class="stream-sources">
-                            <strong>Recent Sources:</strong>
-                            <ul id="recent-sources" class="list-unstyled mt-1"></ul>
-                        </div>
-                    </div>
-                    <div class="progress mt-3">
-                        <div class="progress-bar progress-bar-striped progress-bar-animated" 
-                             role="progressbar" style="width: 100%"></div>
-                    </div>
-                `;
+        // Trigger dynamic layout change: centered form → side-by-side
+        const mainContentRow = document.getElementById('main-content-row');
+        const formColumn = document.getElementById('form-column');
+        const feedColumn = document.getElementById('feed-column');
+        const contentWrapper = document.querySelector('.content-wrapper');
+        const heroSection = document.querySelector('.hero-section');
+        
+        if (mainContentRow && formColumn && feedColumn) {
+            // Add research-active class for CSS transitions
+            mainContentRow.classList.add('research-active');
+            if (contentWrapper) {
+                contentWrapper.classList.add('research-active');
             }
+            if (heroSection) {
+                heroSection.classList.add('research-active');
+            }
+            
+            // Change form column from col-12 to col-lg-6 (give more space to feed)
+            formColumn.className = 'col-lg-6';
+            
+            // Show and set feed column to col-lg-6 (equal split for more feed space)
+            feedColumn.className = 'col-lg-6';
+            feedColumn.classList.remove('d-none');
+        }
+        
+        // Set up the SSE feed
+        const sseFeed = document.getElementById('sse-feed');
+        if (sseFeed) {
+            sseFeed.innerHTML = '';
+        }
+        
+        // Hide completion state
+        const sseCompletion = document.getElementById('sse-completion');
+        if (sseCompletion) {
+            sseCompletion.classList.add('d-none');
+        }
+        
+        // Add initial event
+        this.addSSEEvent('Initializing research session...');
+    },
+    
+    // Update streaming progress with simple event tracking
+    updateStreamingProgress(data) {
+        const message = data.message || '';
+        const eventType = data.event_type || 'unknown';
+        
+        // Determine event class for styling
+        let eventClass = '';
+        if (eventType.includes('status')) {
+            eventClass = 'status';
+        } else if (eventType.includes('progress')) {
+            eventClass = 'progress';
+        } else if (eventType.includes('error') || eventType.includes('failed')) {
+            eventClass = 'error';
+        }
+        
+        // Update dedicated sources section if we have progress data
+        if (data.sources_processed !== undefined || data.sources_total !== undefined || data.recent_sources) {
+            this.updateSourcesSection(data);
+        }
+        
+        // Only add event to feed if it has a meaningful message
+        // Skip pure progress stats events and empty/meaningless messages
+        const isProgressStatsOnly = eventType.includes('progress') && 
+            (message.includes('Processed') && message.includes('sources') && message.includes('('));
+        
+        const isEmptyOrMeaningless = !message.trim() || 
+            message === 'Processing...' || 
+            message.length < 10 ||
+            /^(Processed|Starting|Task status:|Using advanced|Connection|Initializing)/i.test(message);
+            
+        if (!isProgressStatsOnly && !isEmptyOrMeaningless) {
+            this.addSSEEvent(message, eventClass);
         }
     },
     
-    // Update streaming progress with enhanced status tracking
-    updateStreamingProgress(data) {
-        const statusElement = document.getElementById('current-status');
-        const eventElement = document.getElementById('current-event');
-        const sourcesElement = document.getElementById('recent-sources');
+    // Update the dedicated sources section
+    updateSourcesSection(data) {
+        const sourcesSection = document.getElementById('sse-sources-section');
+        const sourcesRead = document.getElementById('sources-read');
+        const sourcesConsidered = document.getElementById('sources-considered');
+        const recentSourcesList = document.getElementById('recent-sources-list');
         
-        if (statusElement && data.message) {
-            statusElement.textContent = data.message;
+        if (!sourcesSection) return;
+        
+        // Show the sources section if it's hidden
+        if (sourcesSection.classList.contains('d-none')) {
+            sourcesSection.classList.remove('d-none');
         }
         
-        if (eventElement && data.event_type) {
-            eventElement.textContent = data.event_type;
-            
-            // Apply status-specific styling for connection states
-            eventElement.removeAttribute('data-status');
-            const connectionStates = ['reconnecting', 'monitoring', 'robust_monitoring', 'error'];
-            if (connectionStates.some(state => data.event_type.includes(state))) {
-                eventElement.setAttribute('data-status', data.event_type);
-            }
+        // Update numbers
+        if (data.sources_processed !== undefined && sourcesRead) {
+            sourcesRead.textContent = data.sources_processed;
+        }
+        if (data.sources_total !== undefined && sourcesConsidered) {
+            sourcesConsidered.textContent = data.sources_total;
         }
         
-        // Handle different data formats for sources
-        const sources = data.recent_sources || data.sources || [];
-        if (sourcesElement && sources.length > 0) {
-            sourcesElement.innerHTML = '';
-            sources.forEach(source => {
-                const li = document.createElement('li');
-                li.className = 'small text-muted mb-1';
-                li.textContent = this.truncateUrl(source, 60);
-                li.title = source; // Full URL on hover
-                sourcesElement.appendChild(li);
-            });
+        // Update recent sources list
+        if (data.recent_sources && Array.isArray(data.recent_sources) && data.recent_sources.length > 0 && recentSourcesList) {
+            const sourcesToShow = data.recent_sources.slice(-10); // Show last 10 sources
+            recentSourcesList.innerHTML = sourcesToShow.map(source => 
+                `<li><a href="${source}" target="_blank" rel="noopener noreferrer">${source}</a></li>`
+            ).join('');
         }
+    },
+    
+    // Add simple event to SSE feed
+    addSSEEvent(message, eventClass = '') {
+        const sseFeed = document.getElementById('sse-feed');
+        if (!sseFeed) return;
         
-        // Update progress if available
-        if (data.sources_processed && data.sources_total) {
-            const progressBar = document.querySelector('#progress-area .progress-bar');
-            if (progressBar) {
-                const percentage = Math.min((data.sources_processed / data.sources_total) * 100, 90);
-                progressBar.style.width = percentage + '%';
-            }
+        const eventElement = document.createElement('div');
+        eventElement.className = `sse-event ${eventClass}`;
+        
+        const now = new Date();
+        const timeString = now.toLocaleTimeString('en-US', { 
+            hour12: false, 
+            hour: '2-digit', 
+            minute: '2-digit', 
+            second: '2-digit' 
+        });
+        
+        // Ensure message is a string and not undefined/null
+        const displayMessage = message || 'No message';
+        
+        eventElement.innerHTML = `
+            <div class="sse-event-time">${timeString}</div>
+            <div class="sse-event-message">${displayMessage}</div>
+        `;
+        
+        // Add to feed (append to show chronological order)
+        sseFeed.appendChild(eventElement);
+        
+        // Auto-scroll to bottom
+        sseFeed.scrollTop = sseFeed.scrollHeight;
+        
+        // Limit number of events
+        const events = sseFeed.querySelectorAll('.sse-event');
+        if (events.length > 100) {
+            sseFeed.removeChild(events[0]);
         }
     },
     

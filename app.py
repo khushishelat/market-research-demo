@@ -30,11 +30,12 @@ if not PARALLEL_API_KEY:
 client = Parallel(api_key=PARALLEL_API_KEY)
 
 # Configuration
-MAX_REPORTS_PER_HOUR = 5  # Global rate limit: 5 reports per hour
+MAX_REPORTS_PER_HOUR = 100  # Global rate limit: 100 reports per hour
 DATABASE_PATH = 'market_research.db'
 
 # In-memory task tracking for background monitoring
 active_tasks = {}  # {task_run_id: {'metadata': task_metadata, 'thread': thread_obj}}
+completed_tasks = set()  # Track completed tasks to prevent duplicate processing
 
 
 def init_database():
@@ -166,31 +167,67 @@ def convert_basis_to_dict(basis):
     return result
 
 def save_report(title, slug, industry, geography, details, content, basis=None, task_run_id=None):
-    """Save report to database"""
+    """Save report to database with atomic duplicate prevention"""
     conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
     
-    report_id = str(uuid.uuid4())
-    
-    # Convert basis to JSON string if provided
-    basis_json = None
-    if basis:
-        try:
-            basis_dict = convert_basis_to_dict(basis)
-            basis_json = json.dumps(basis_dict) if basis_dict else None
-        except Exception as e:
-            print(f"Error converting basis to JSON: {e}")
-            basis_json = None
-    
-    cursor.execute('''
-        INSERT INTO reports (id, title, slug, industry, geography, details, content, basis, is_public, task_run_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
-    ''', (report_id, title, slug, industry, geography, details, content, basis_json, task_run_id))
-    
-    conn.commit()
-    conn.close()
-    
-    return report_id
+    try:
+        # First check if a report already exists for this task_run_id
+        if task_run_id:
+            cursor.execute('SELECT id FROM reports WHERE task_run_id = ?', (task_run_id,))
+            existing_report = cursor.fetchone()
+            if existing_report:
+                print(f"Report already exists for task {task_run_id}, skipping duplicate save")
+                conn.close()
+                return existing_report[0]
+        
+        report_id = str(uuid.uuid4())
+        
+        # Convert basis to JSON string if provided
+        basis_json = None
+        if basis:
+            try:
+                basis_dict = convert_basis_to_dict(basis)
+                basis_json = json.dumps(basis_dict) if basis_dict else None
+            except Exception as e:
+                print(f"Error converting basis to JSON: {e}")
+                basis_json = None
+        
+        cursor.execute('''
+            INSERT INTO reports (id, title, slug, industry, geography, details, content, basis, is_public, task_run_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+        ''', (report_id, title, slug, industry, geography, details, content, basis_json, task_run_id))
+        
+        conn.commit()
+        print(f"Successfully saved new report {report_id} for task {task_run_id}")
+        return report_id
+        
+    except sqlite3.IntegrityError as e:
+        # Handle case where slug already exists (create new slug)
+        if "slug" in str(e).lower():
+            # Generate new slug and retry
+            base_slug = slug
+            counter = 1
+            while True:
+                new_slug = f"{base_slug}-{counter}"
+                cursor.execute('SELECT id FROM reports WHERE slug = ?', (new_slug,))
+                if not cursor.fetchone():
+                    slug = new_slug
+                    break
+                counter += 1
+            
+            # Retry with new slug
+            cursor.execute('''
+                INSERT INTO reports (id, title, slug, industry, geography, details, content, basis, is_public, task_run_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+            ''', (report_id, title, slug, industry, geography, details, content, basis_json, task_run_id))
+            conn.commit()
+            print(f"Successfully saved report {report_id} with adjusted slug {slug} for task {task_run_id}")
+            return report_id
+        else:
+            raise e
+    finally:
+        conn.close()
 
 def get_report_by_slug(slug):
     """Get report by slug (public access)"""
@@ -436,6 +473,11 @@ def process_task_event(event_type, event_data):
     Process different event types from Parallel API
     Returns standardized event format for frontend
     """
+    # Debug logging to understand event structure
+    print(f"Processing event type: {event_data.get('type', event_type)}")
+    if 'source_stats' in event_data:
+        print(f"Source stats found: {event_data.get('source_stats')}")
+    
     processed = {
         'timestamp': event_data.get('timestamp'),
         'raw_type': event_data.get('type', event_type)
@@ -471,12 +513,25 @@ def process_task_event(event_type, event_data):
     elif 'progress_msg' in event_data.get('type', ''):
         msg_type = event_data.get('type', '').split('.')[-1]  # Get last part after dot
         
+        # Check if this progress_msg event has source data
+        source_stats = event_data.get('source_stats', {})
+        
         processed.update({
             'type': 'task.log',
             'log_level': msg_type,
             'message': event_data.get('message', ''),
             'category': 'log'
         })
+        
+        # Add source data if available in progress_msg events
+        if source_stats:
+            num_sources = source_stats.get('num_sources_read', 0)
+            total_sources = source_stats.get('num_sources_considered', 0)
+            processed.update({
+                'sources_processed': num_sources,
+                'sources_total': total_sources,
+                'recent_sources': source_stats.get('sources_read_sample', [])[-5:]  # Last 5
+            })
         
     else:
         # Handle unknown event types
@@ -512,6 +567,18 @@ def monitor_task_with_sse(task_run_id):
         )
         
         if task_completed and final_status == 'completed':
+            # Check if this task has already been completed by another monitoring system
+            if task_run_id in completed_tasks:
+                print(f"Task {task_run_id} already completed by another monitoring system")
+                return jsonify({
+                    'success': True,
+                    'task_completed': True,
+                    'message': 'Task already completed'
+                })
+            
+            # Mark as completed to prevent other systems from processing
+            completed_tasks.add(task_run_id)
+            
             # Fetch final result and save report
             try:
                 run_result = client.task_run.result(task_run_id)
@@ -721,9 +788,17 @@ def monitor_task_completion(task_run_id, task_metadata):
         # If we reach here, the task completed
         print(f"Background monitor detected completion for task {task_run_id}")
         
+        # Check if task has already been completed by another monitoring system
+        if task_run_id in completed_tasks:
+            print(f"Task {task_run_id} already completed by another monitoring system, background monitor exiting")
+            return
+        
         # Check if task is still being tracked (not already completed via SSE)
         if task_run_id in active_tasks:
             print(f"Task {task_run_id} completed via background monitor - saving report")
+            
+            # Mark as completed to prevent other systems from processing
+            completed_tasks.add(task_run_id)
             
             # Save the report (same logic as complete_task endpoint)
             try:
@@ -767,10 +842,21 @@ def monitor_task_completion(task_run_id, task_metadata):
 def complete_task(task_run_id):
     """Handle task completion and save the report"""
     try:
+        # Check if this task has already been completed by another monitoring system
+        if task_run_id in completed_tasks:
+            print(f"Task {task_run_id} already completed by another monitoring system")
+            return jsonify({
+                'success': True,
+                'message': 'Task already completed'
+            })
+        
         # Get task metadata from session
         task_metadata = session.get(f'task_{task_run_id}')
         if not task_metadata:
             return jsonify({'error': 'Task metadata not found'}), 404
+        
+        # Mark as completed to prevent other systems from processing
+        completed_tasks.add(task_run_id)
             
         # Get the final result
         run_result = client.task_run.result(task_run_id)
