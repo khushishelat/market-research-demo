@@ -133,7 +133,6 @@ body {
     text-align: center;
     margin-bottom: 1rem;
     line-height: 1.2;
-    text-transform: uppercase;
     letter-spacing: 0.5px;
 }
 
@@ -221,12 +220,12 @@ body {
 .navbar {
     background-color: var(--background-color) !important;
     border-bottom: 1px solid var(--border-color);
-    padding: 1rem 0;
+    padding: 0.75rem 0;
 }
 
 .navbar-brand {
-    font-weight: 600;
-    font-size: 1.4rem;
+    font-weight: 500;
+    font-size: 1rem;
     color: var(--text-primary) !important;
 }
 
@@ -237,10 +236,24 @@ body {
 .navbar-nav .nav-link {
     color: var(--text-primary) !important;
     font-weight: 500;
+    font-size: 0.85rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .navbar-nav .nav-link:hover {
     color: var(--primary-color) !important;
+}
+
+/* GitHub icon styling */
+.navbar-nav .nav-link .fab.fa-github {
+    font-size: 1.2rem;
+}
+
+/* External link icon styling */
+.navbar-nav .nav-link .fas.fa-external-link-alt {
+    font-size: 0.7rem;
 }
 
 /* Cards */
@@ -476,12 +489,12 @@ body {
 .form-select {
     border-radius: 4px;
     border: 2px solid var(--light-border);
-    padding: 16px 20px;
+    padding: 12px 16px;
     transition: all 0.2s ease;
     background: white;
     color: var(--index-black);
     font-family: 'FT System Mono', monospace;
-    font-size: 14px;
+    font-size: 13px;
 }
 
 .form-control:focus,
@@ -493,8 +506,8 @@ body {
 }
 
 .form-control-lg {
-    padding: 16px 20px;
-    font-size: 1.1rem;
+    padding: 12px 16px;
+    font-size: 14px;
 }
 
 .form-label {
@@ -517,9 +530,24 @@ body {
 .research-form {
     background-color: var(--card-background);
     border-radius: 4px;
-    padding: 24px;
+    padding: 1rem;
     box-shadow: var(--shadow-light);
     border: 2px solid var(--light-border);
+}
+
+/* Form submission state - disabled inputs */
+.form-submitting .form-control,
+.form-submitting .form-select {
+    background-color: var(--gray-bg);
+    color: var(--gray-text);
+    cursor: not-allowed;
+    border-color: var(--neural);
+}
+
+.form-submitting .form-control:focus,
+.form-submitting .form-select:focus {
+    border-color: var(--neural);
+    box-shadow: none;
 }
 
 /* Grid layouts */
@@ -784,6 +812,35 @@ footer {
 @media (max-width: 768px) {
     .content-wrapper {
         padding: 0 16px;
+    }
+    
+    .hero-text-container {
+        max-width: 100%;
+        margin-bottom: 2rem;
+        padding: 0 1rem;
+    }
+    
+    .navbar {
+        padding: 0.5rem 0;
+    }
+    
+    .navbar-brand {
+        font-size: 0.9rem;
+    }
+    
+    .navbar-nav .nav-link {
+        font-size: 0.75rem;
+        padding: 0.5rem 0.75rem;
+    }
+    
+    /* Mobile GitHub icon */
+    .navbar-nav .nav-link .fab.fa-github {
+        font-size: 1rem;
+    }
+    
+    /* Mobile external link icon */
+    .navbar-nav .nav-link .fas.fa-external-link-alt {
+        font-size: 0.6rem;
     }
     
     body {
@@ -1321,8 +1378,15 @@ footer {
     padding: 0 1rem;
 }
 
+.hero-text-container {
+    max-width: 700px;
+    margin: 0 auto 3rem auto;
+    padding: 0 1rem;
+    text-align: center;
+}
+
 .hero-section .centered-content {
-    max-width: 800px;
+    max-width: 600px;
 }
 
 /* Utility Classes */
@@ -1447,7 +1511,7 @@ footer {
     background: white;
     border: 2px solid var(--light-border);
     border-radius: 8px;
-    padding: 2rem;
+    padding: 1.5rem;
     height: fit-content;
     max-width: 800px !important;
     margin: 0 auto;
@@ -1466,10 +1530,18 @@ footer {
     overflow-y: auto;
 }
 
+/* Initial state: form column should be centered */
+#form-column {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+}
+
 /* When research starts, form adjusts for side-by-side */
 .research-active #form-column {
     max-width: none !important;
     padding-right: 1rem;
+    justify-content: flex-start;
 }
 
 .research-active #feed-column {
@@ -1832,10 +1904,15 @@ footer {
         padding: 0 20px;
     }
     
+    #form-column {
+        justify-content: center;
+    }
+    
     .research-active #form-column,
     .research-active #feed-column {
         padding-left: 15px;
         padding-right: 15px;
+        justify-content: flex-start;
     }
     
     .form-section {
@@ -1855,7 +1932,7 @@ footer {
 @media (max-width: 768px) {
     .form-section,
     .sse-feed-container {
-        padding: 1.5rem;
+        padding: 1rem;
     }
     
     .form-section-title {

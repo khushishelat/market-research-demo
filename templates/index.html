@@ -5,11 +5,13 @@
 {% block content %}
 <!-- Hero Section -->
 <div class="hero-section">
-    <div class="centered-content">
-        <h1 class="hero-title gerstner">Accurate, AI-powered Market Research direct to your inbox</h1>
+    <div class="hero-text-container">
+        <h1 class="hero-title gerstner">Market Research On Demand</h1>
         <p class="hero-subtitle">
             Generate a multi-page market research report on any industry, with comprehensive in-line citations, reasoning and excerpts. Powered by Parallel Deep Research.
         </p>
+    </div>
+    <div class="centered-content">
         
         <!-- Research Form - Dynamic Layout -->
         <div class="content-wrapper">
@@ -66,7 +68,7 @@
                                 <button type="submit" class="btn btn-primary btn-lg" id="generate-btn" 
                                         {% if recent_report_count >= max_reports_per_hour %}disabled{% endif %}>
                                     <i class="fas fa-rocket me-2"></i>
-                                    <span class="btn-text">Launch AI-Powered Deep Research</span>
+                                    <span class="btn-text">Start Deep Research</span>
                                     <span class="spinner-border spinner-border-sm ms-2 d-none" role="status"></span>
                                 </button>
                                 {% if recent_report_count >= max_reports_per_hour %}
@@ -80,7 +82,7 @@
                             <!-- Keyboard shortcut hint -->
                             <div class="text-center mt-3">
                                 <small class="text-muted">
-                                    Press <kbd>⌘</kbd> + <kbd>Enter</kbd> to launch research instantly
+                                    or press <kbd>⌘</kbd> + <kbd>Enter</kbd>
                                 </small>
                             </div>
                         </form>
@@ -139,24 +141,6 @@
             </div>
         </div>
 
-        <div class="text-center mt-3">
-            <small class="text-muted">{{ max_reports_per_hour }} REPORTS PER HOUR GLOBALLY</small>
-        </div>
-
-        <!-- Global Rate Limit Status -->
-        <div class="status-card text-center">
-            <h6 class="mb-2">
-                <i class="fas fa-chart-bar me-2"></i>Global Usage Status
-            </h6>
-            <p class="mb-2">
-                <strong>{{ recent_report_count }}</strong> of <strong>{{ max_reports_per_hour }}</strong> reports used in the last hour.
-            </p>
-            <div class="progress mx-auto" style="width: 200px; height: 8px;">
-                <div class="progress-bar" role="progressbar" 
-                     style="width: {{ ((recent_report_count or 0) / (max_reports_per_hour or 1) * 100) if max_reports_per_hour else 0 }}%"></div>
-            </div>
-            <small class="text-muted">{{ max_reports_per_hour - recent_report_count }} remaining this hour</small>
-        </div>
     </div>
 </div>
 

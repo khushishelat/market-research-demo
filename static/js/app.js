@@ -159,6 +159,7 @@ const App = {
     // Set loading state
     setLoadingState(isLoading) {
         const generateBtn = document.getElementById('generate-btn');
+        const form = document.getElementById('research-form');
         const activityFeedSection = document.getElementById('activity-feed-section');
         const spinner = generateBtn?.querySelector('.spinner-border');
         const btnText = generateBtn?.querySelector('.btn-text');
@@ -170,6 +171,15 @@ const App = {
             spinner?.classList.remove('d-none');
             if (btnText) btnText.textContent = 'Launching AI Research...';
             
+            // Add submitting class and disable form inputs
+            if (form) {
+                form.classList.add('form-submitting');
+                const inputs = form.querySelectorAll('input, select, textarea');
+                inputs.forEach(input => {
+                    input.disabled = true;
+                });
+            }
+            
             // Always show streaming UI when loading starts
             this.showStreamingUI();
             
@@ -177,6 +187,15 @@ const App = {
             generateBtn.disabled = false;
             spinner?.classList.add('d-none');
             if (btnText) btnText.textContent = 'Launch AI-Powered Deep Research';
+            
+            // Remove submitting class and re-enable form inputs
+            if (form) {
+                form.classList.remove('form-submitting');
+                const inputs = form.querySelectorAll('input, select, textarea');
+                inputs.forEach(input => {
+                    input.disabled = false;
+                });
+            }
             
             // Keep activity feed visible after completion
             // Don't hide it automatically - user can scroll away
