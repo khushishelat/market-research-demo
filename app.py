@@ -18,7 +18,7 @@ import urllib.parse
 
 from parallel import Parallel
 from parallel.types import TaskSpecParam
-from openai import OpenAI
+# Removed OpenAI import - using direct requests to Parallel API
 
 # Load environment variables
 load_dotenv('.env.local')
@@ -686,25 +686,7 @@ def validate_form_inputs(industry, geography, details, debug=False):
         tuple: (is_valid: bool, error_message: str or None, debug_info: dict or None)
         If debug=True, returns additional validation details in debug_info
     """
-    # If OpenAI client failed to initialize, use basic fallback validation
-    if openai_client is None:
-        print("Warning: OpenAI client not available, using basic validation")
-        # Basic validation: reject obvious test strings
-        industry_lower = industry.lower().strip()
-        
-        # Reject obvious test strings
-        test_strings = ['test', 'hello', 'hi', 'example', 'abc', 'xyz', 'asdf', 'qwerty', 'kjhjkhkjh']
-        if industry_lower in test_strings or len(industry_lower) < 2 or industry_lower.isdigit():
-            if debug:
-                return False, "Please enter a real industry name.", {'error': 'Basic validation failed'}
-            else:
-                return False, "Please enter a real industry name."
-        
-        # Allow anything else when OpenAI is not available
-        if debug:
-            return True, None, {'error': 'OpenAI client not available, used basic validation'}
-        else:
-            return True, None
+    # Use direct requests to call Parallel API (no SDK issues)
     
     try:
         # Combine all inputs for validation
@@ -720,9 +702,9 @@ Validation criteria:
 1. The inputs must NOT contain profanity, offensive language, or dangerous content (weapons, violence, illegal activities)
 2. The industry field must represent a real business industry or market segment. REJECT only obvious test strings like:
    - Single words like "test", "hello", "hi", "example"
-   - Very short random character combinations like "ab", "xyz", "asdf" 
+   - Random character combinations like "ab", "xyz", "asdf", "dsfsdfsdf", "kjhjkhkjh", "mjbkjhkjh"
    - Just numbers like "123", "456"
-   - Obvious placeholder text
+   - Obvious placeholder text or keyboard mashing
    
 ACCEPT legitimate industry terms including:
    - Technology sectors (AI, VR, SaaS, healthcare tech, fintech, etc.)
@@ -737,12 +719,19 @@ Be reasonably permissive - err on the side of accepting legitimate business quer
 Return your analysis in the specified JSON format.
 """
 
-        response = openai_client.chat.completions.create(
-            model="speed",  # Parallel's fast model
-            messages=[
+        # Call Parallel's API directly using requests
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {PARALLEL_API_KEY}"
+        }
+        
+        payload = {
+            "model": "speed",
+            "messages": [
                 {"role": "user", "content": validation_prompt}
             ],
-            response_format={
+            "stream": False,
+            "response_format": {
                 "type": "json_schema",
                 "json_schema": {
                     "name": "validation_schema",
@@ -767,12 +756,28 @@ Return your analysis in the specified JSON format.
                     }
                 }
             },
-            temperature=0.1,  # Low temperature for consistent validation
-            max_tokens=500
+            "temperature": 0.1,
+            "max_tokens": 500
+        }
+        
+        response = requests.post(
+            "https://api.parallel.ai/chat/completions",
+            headers=headers,
+            json=payload,
+            timeout=30
         )
         
+        if response.status_code != 200:
+            print(f"Parallel API error: {response.status_code} - {response.text}")
+            # Fail safe - if API is down, allow input to pass
+            if debug:
+                return True, None, {'error': f'API error: {response.status_code}'}
+            else:
+                return True, None
+        
         # Parse the response
-        result_content = response.choices[0].message.content
+        response_data = response.json()
+        result_content = response_data['choices'][0]['message']['content']
         validation_result = json.loads(result_content)
         
         is_valid = validation_result.get('is_valid', False)
@@ -781,8 +786,8 @@ Return your analysis in the specified JSON format.
         
         # Prepare debug info
         debug_info = {
-            'response_id': getattr(response, 'id', 'unknown'),
-            'model': response.model if hasattr(response, 'model') else 'speed',
+            'response_id': response_data.get('id', 'unknown'),
+            'model': 'speed',
             'reasoning': reasoning,
             'issues_found': issues_found,
             'raw_response': result_content,
