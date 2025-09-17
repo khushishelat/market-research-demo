@@ -10,7 +10,7 @@ A comprehensive web application that generates detailed market research reports 
 - **Public Report Library**: Browse all generated reports without any authentication required
 - **Global Access**: No authentication needed - anyone can generate and view reports
 - **Interactive Dashboard**: Clean, modern web interface with real-time progress visualization
-- 📥 **Download Support**: Export reports as Markdown files
+- **Download Support**: Export reports as Markdown files
 - **Shareable URLs**: Each report gets a unique URL slug for easy sharing
 - **Responsive Design**: Works seamlessly on desktop and mobile devices
 
