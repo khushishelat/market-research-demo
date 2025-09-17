@@ -3,10 +3,11 @@
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Your Report is Ready</title>
+    <title>Your Market Research is Ready</title>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600&display=swap" rel="stylesheet">
     <style type="text/css">
         /* Email-safe CSS Reset */
-        body, table, td, p, a, li, blockquote {
+        body, table, td, p, a {
             -webkit-text-size-adjust: 100%;
             -ms-text-size-adjust: 100%;
         }
@@ -14,274 +15,135 @@
             mso-table-lspace: 0pt;
             mso-table-rspace: 0pt;
         }
-        img {
-            -ms-interpolation-mode: bicubic;
-            border: 0;
-            height: auto;
-            line-height: 100%;
-            outline: none;
-            text-decoration: none;
-        }
         
-        /* Body and wrapper styles */
+        /* Body styles */
         body {
             margin: 0 !important;
             padding: 0 !important;
-            background-color: #fcfcfa;
-            font-family: Georgia, 'Times New Roman', serif;
-            font-weight: 400;
-            color: #1d1b16;
-            line-height: 1.6;
-        }
-        
-        /* Container table */
-        .email-wrapper {
-            background-color: #fcfcfa;
-            padding: 40px 20px;
-        }
-        
-        .email-container {
             background-color: #ffffff;
-            border-radius: 4px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
-            max-width: 580px;
+            font-family: 'Manrope', Arial, sans-serif;
+            color: #333333;
+            line-height: 1.5;
+        }
+        
+        /* Container */
+        .email-container {
+            max-width: 600px;
             margin: 0 auto;
+            padding: 60px 40px;
         }
         
-        /* Logo styles */
-        .logo-table {
-            padding: 40px 20px 32px 20px;
+        /* Main heading */
+        .main-heading {
+            font-family: 'Manrope', Arial, sans-serif;
+            font-size: 32px;
+            font-weight: 600;
+            color: #333333;
+            text-align: center;
+            margin: 0 0 40px 0;
+            line-height: 1.3;
         }
         
-        .logo-content {
-            font-family: 'Courier New', Courier, monospace;
+        /* Subtitle */
+        .subtitle {
+            font-family: 'Manrope', Arial, sans-serif;
             font-size: 18px;
-            font-weight: bold;
-            color: #1d1b16;
-            text-decoration: none;
+            font-weight: 400;
+            color: #666666;
             text-align: center;
+            margin: 0 0 40px 0;
         }
         
-        .logo-icon {
-            color: #fb631b;
-            font-size: 20px;
-            margin-right: 8px;
-        }
-        
-        /* Content styles */
-        .content-table {
-            padding: 0 20px 40px 20px;
-        }
-        
-        .heading {
-            font-size: 28px;
-            line-height: 1.2;
-            font-weight: bold;
-            color: #1d1b16;
+        /* Button */
+        .button-container {
             text-align: center;
-            margin: 0 0 24px 0;
-            font-family: 'Courier New', Courier, monospace;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        
-        .paragraph {
-            font-size: 15px;
-            line-height: 1.7;
-            color: #1d1b16;
-            margin: 0 0 20px 0;
-            text-align: left;
-        }
-        
-        .report-title {
-            font-weight: bold;
-            color: #fb631b;
-            font-family: 'Courier New', Courier, monospace;
-            font-size: 16px;
-        }
-        
-        /* Button styles */
-        .button-table {
-            margin: 32px 0;
+            margin: 0 0 80px 0;
         }
         
         .button {
             background-color: #fb631b;
             color: #ffffff !important;
-            font-size: 14px;
-            font-weight: bold;
+            font-family: 'Manrope', Arial, sans-serif;
+            font-size: 16px;
+            font-weight: 600;
             text-decoration: none;
             text-align: center;
             display: inline-block;
             padding: 16px 32px;
-            border-radius: 4px;
-            font-family: 'Courier New', Courier, monospace;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
+            border-radius: 8px;
             border: none;
         }
         
         .button:hover {
-            opacity: 0.9 !important;
+            background-color: #e55530 !important;
             color: #ffffff !important;
         }
         
-        /* Divider styles */
-        .divider {
-            border: none;
-            border-top: 1px solid #e8e6e1;
-            margin: 32px 0;
-            height: 1px;
+        /* Footer */
+        .footer {
+            background-color: #f8f9fa;
+            padding: 20px;
+            text-align: center;
+            margin: 0 -40px;
         }
         
-        /* Footer styles */
-        .footer {
-            color: #6b7280;
-            font-size: 12px;
-            line-height: 1.5;
-            text-align: center;
-            font-family: 'Courier New', Courier, monospace;
+        .footer-text {
+            font-family: 'Manrope', Arial, sans-serif;
+            font-size: 14px;
+            color: #6c757d;
             margin: 0;
         }
         
-        /* Link styles */
-        .link {
-            color: #fb631b !important;
-            text-decoration: underline;
+        .footer-text a {
+            color: #fb631b;
+            text-decoration: none;
         }
         
-        .link:hover {
-            opacity: 0.8 !important;
+        .footer-text a:hover {
+            text-decoration: underline;
         }
         
         /* Mobile responsive */
         @media screen and (max-width: 600px) {
             .email-container {
-                margin: 20px !important;
-                width: auto !important;
+                padding: 40px 20px !important;
             }
             
-            .logo-table,
-            .content-table {
-                padding-left: 20px !important;
-                padding-right: 20px !important;
+            .main-heading {
+                font-size: 28px !important;
             }
             
-            .heading {
-                font-size: 24px !important;
-            }
-            
-            .paragraph {
-                font-size: 14px !important;
-            }
-            
-            .logo-content {
+            .subtitle {
                 font-size: 16px !important;
             }
             
-            .button {
-                padding: 12px 24px !important;
+            .footer {
+                margin: 0 -20px !important;
             }
         }
-        
-        /* Outlook-specific styles - conditional comments moved to body */
     </style>
 </head>
 <body>
-    <table cellpadding="0" cellspacing="0" border="0" width="100%" class="email-wrapper">
+    <table cellpadding="0" cellspacing="0" border="0" width="100%">
         <tr>
             <td align="center">
-                <table cellpadding="0" cellspacing="0" border="0" class="email-container">
-                    <!-- Logo Section -->
-                    <tr>
-                        <td class="logo-table">
-                            <table cellpadding="0" cellspacing="0" border="0" width="100%">
-                                <tr>
-                                    <td align="center">
-                                        <span class="logo-content">
-                                            <span class="logo-icon">📊</span>Market Research App
-                                        </span>
-                                    </td>
-                                </tr>
-                            </table>
-                        </td>
-                    </tr>
+                <div class="email-container">
+                    <h1 class="main-heading">Your Market Research is Ready</h1>
                     
-                    <!-- Content Section -->
-                    <tr>
-                        <td class="content-table">
-                            <table cellpadding="0" cellspacing="0" border="0" width="100%">
-                                <!-- Heading -->
-                                <tr>
-                                    <td>
-                                        <h1 class="heading">Your report is ready</h1>
-                                    </td>
-                                </tr>
-                                
-                                <!-- Report Title (if provided) -->
-                                {% if report_title %}
-                                <tr>
-                                    <td>
-                                        <p class="paragraph">
-                                            <span class="report-title">{{ report_title }}</span>
-                                        </p>
-                                    </td>
-                                </tr>
-                                {% endif %}
-                                
-                                <!-- Description -->
-                                <tr>
-                                    <td>
-                                        <p class="paragraph">
-                                            Your Market Research report is now available to read. You can open it using the link below.
-                                        </p>
-                                    </td>
-                                </tr>
-                                
-                                <!-- Button -->
-                                <tr>
-                                    <td class="button-table">
-                                        <table cellpadding="0" cellspacing="0" border="0" width="100%">
-                                            <tr>
-                                                <td align="center">
-                                                    <a href="{{ report_url }}" class="button" target="_blank">
-                                                        Read report
-                                                    </a>
-                                                </td>
-                                            </tr>
-                                        </table>
-                                    </td>
-                                </tr>
-                                
-                                <!-- Direct URL -->
-                                <tr>
-                                    <td>
-                                        <p class="paragraph">
-                                            Or open this URL directly: 
-                                            <a href="{{ report_url }}" class="link" target="_blank">{{ report_url }}</a>
-                                        </p>
-                                    </td>
-                                </tr>
-                                
-                                <!-- Divider -->
-                                <tr>
-                                    <td>
-                                        <hr class="divider">
-                                    </td>
-                                </tr>
-                                
-                                <!-- Footer -->
-                                <tr>
-                                    <td>
-                                        <p class="footer">
-                                            AI Market Research App Demo
-                                        </p>
-                                    </td>
-                                </tr>
-                            </table>
-                        </td>
-                    </tr>
-                </table>
+                    <p class="subtitle">View your report here</p>
+                    
+                    <div class="button-container">
+                        <a href="{{ report_url }}" class="button" target="_blank">
+                            View Report
+                        </a>
+                    </div>
+                    
+                    <div class="footer">
+                        <p class="footer-text">
+                            Market Research Demo built with <a href="https://parallel.ai" target="_blank">Parallel</a>
+                        </p>
+                    </div>
+                </div>
             </td>
         </tr>
     </table>
