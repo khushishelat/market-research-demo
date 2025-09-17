@@ -513,14 +513,47 @@ def get_all_public_reports():
     cursor.close()
     conn.close()
     
+    # Add color for each report
+    colors = ['#FF6B35', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E9']
+    
     return [{
         'id': row['id'],
         'title': row['title'],
         'slug': row['slug'],
         'industry': row['industry'],
         'geography': row['geography'],
-        'created_at': row['created_at']
-    } for row in results]
+        'created_at': row['created_at'],
+        'company_color': colors[i % len(colors)]
+    } for i, row in enumerate(results)]
+
+def get_all_public_reports_limited(limit):
+    """Get limited public reports for the library"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT id, title, slug, industry, geography, created_at
+        FROM reports WHERE is_public = %s AND status = 'completed'
+        ORDER BY created_at DESC
+        LIMIT %s
+    ''', (True, limit))
+    
+    results = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    
+    # Add color for each report (like in original function)
+    colors = ['#FF6B35', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E9']
+    
+    return [{
+        'id': row['id'],
+        'title': row['title'],
+        'slug': row['slug'],
+        'industry': row['industry'],
+        'geography': row['geography'],
+        'created_at': row['created_at'],
+        'company_color': colors[i % len(colors)]
+    } for i, row in enumerate(results)]
 
 def save_running_task(task_run_id, industry, geography, details, session_id, email=None):
     """Save running task to unified reports table"""
@@ -828,14 +861,23 @@ Return your analysis in the specified JSON format.
 @app.route('/')
 def index():
     """Main page with public report library and report generation"""
-    # Get all public reports for the library
-    public_reports = get_all_public_reports()
+    # Get running tasks first
+    active_tasks_for_library = get_running_tasks()
+    
+    # Calculate how many slots are left for public reports (max 15 total blocks)
+    max_total_blocks = 15
+    active_tasks_count = len(active_tasks_for_library)
+    max_public_reports = max(0, max_total_blocks - active_tasks_count)
+    
+    # Get limited public reports for the library
+    public_reports = get_all_public_reports_limited(max_public_reports)
+    
+    # Debug logging
+    print(f"Index route - Active tasks: {active_tasks_count}, Max public reports: {max_public_reports}, Got public reports: {len(public_reports)}")
     
     # Get current rate limit status
     recent_report_count = get_recent_report_count()
     
-    # Get ALL running tasks (since each task_run_id is its own "session")
-    active_tasks_for_library = get_running_tasks()
     recently_completed = []  # Simplify for now
     
     # Debug logging
@@ -1641,9 +1683,16 @@ def get_library_html():
     get_library_html.last_requests[client_ip] = current_time
     
     try:
-        # Get all public reports and running tasks (same as index route)
-        public_reports = get_all_public_reports()
+        # Get running tasks first
         active_tasks_for_library = get_running_tasks()
+        
+        # Calculate how many slots are left for public reports (max 15 total blocks)
+        max_total_blocks = 15
+        active_tasks_count = len(active_tasks_for_library)
+        max_public_reports = max(0, max_total_blocks - active_tasks_count)
+        
+        # Get limited public reports
+        public_reports = get_all_public_reports_limited(max_public_reports)
         
         # Render just the library section 
         return render_template_string('''
