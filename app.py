@@ -922,10 +922,10 @@ def generate_report():
         # Generate research input
         research_input = generate_market_research_input(industry, geography, details)
         
-        # Create task with Parallel API (events enabled by default for ultra processor)
+        # Create task with Parallel API (events enabled by default for ultra2x processor)
         task_run = client.task_run.create(
             input=research_input,
-            processor="ultra",
+            processor="ultra2x",
             task_spec={
                 "output_schema": {
                     "type": "text",

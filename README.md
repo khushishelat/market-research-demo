@@ -4,7 +4,7 @@ A comprehensive web application that generates detailed market research reports 
 
 ## ✨ Features
 
-- **AI-Powered Research**: Uses Parallel's Deep Research API with "ultra" processor for comprehensive market analysis
+- **AI-Powered Research**: Uses Parallel's Deep Research API with "ultra2x" processor for comprehensive market analysis
 - **Real-Time Progress Streaming**: Server-Sent Events (SSE) for live task progress updates with source tracking
 - **Email Notifications**: Optional email alerts via Resend API when reports are ready
 - **Public Report Library**: Browse all generated reports without any authentication required
@@ -13,6 +13,7 @@ A comprehensive web application that generates detailed market research reports 
 - **Download Support**: Export reports as Markdown files
 - **Shareable URLs**: Each report gets a unique URL slug for easy sharing
 - **Responsive Design**: Works seamlessly on desktop and mobile devices
+- **Input Validation**: Low-latency validation of inputs via Parallel's Chat API
 
 ## Quick Start
 
@@ -222,7 +223,7 @@ MAX_REPORTS_PER_HOUR=100                        # Global reports per hour (defau
 ### Technology Stack
 - **Backend**: Flask (Python web framework)
 - **Database**: PostgreSQL via Supabase
-- **AI Research**: Parallel Deep Research API ("ultra" processor)
+- **AI Research**: Parallel Deep Research API ("ultra2x" processor)
 - **Email**: Resend API for notifications
 - **Real-time**: Server-Sent Events (SSE) for progress streaming
 - **Frontend**: Bootstrap 5, Font Awesome icons, custom CSS
