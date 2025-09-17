@@ -114,6 +114,18 @@
                                 {% endif %}
                             </div>
 
+                            <!-- Validation Status -->
+                            <div class="validation-status mt-3" id="validation-status">
+                                <div class="d-flex align-items-center justify-content-center">
+                                    <div class="validation-spinner d-none me-2" id="validation-spinner">
+                                        <div class="spinner-border spinner-border-sm text-primary" role="status">
+                                            <span class="visually-hidden">Validating...</span>
+                                        </div>
+                                    </div>
+                                    <div class="validation-message" id="validation-message"></div>
+                                </div>
+                            </div>
+
                             <!-- Keyboard shortcut hint -->
                             <div class="text-center mt-3">
                                 <small class="text-muted">

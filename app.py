@@ -18,6 +18,7 @@ import urllib.parse
 
 from parallel import Parallel
 from parallel.types import TaskSpecParam
+from openai import OpenAI
 
 # Load environment variables
 load_dotenv('.env.local')
@@ -31,6 +32,12 @@ if not PARALLEL_API_KEY:
     raise ValueError("PARALLEL_API_KEY not found in environment variables")
 
 client = Parallel(api_key=PARALLEL_API_KEY)
+
+# Initialize OpenAI client for Parallel's chat completions API (used for validation)
+openai_client = OpenAI(
+    api_key=PARALLEL_API_KEY,
+    base_url="https://api.parallel.ai"
+)
 
 # Email configuration
 RESEND_API_KEY = os.getenv('RESEND_API_KEY')
@@ -661,6 +668,131 @@ def get_recently_completed_reports_for_session(session_id):
     } for row in results]
 
 
+def validate_form_inputs(industry, geography, details, debug=False):
+    """
+    Validate form inputs using Parallel's chat completions API.
+    
+    Checks for:
+    1. Profanity or dangerous content (weapons, etc.)
+    2. Real industry/market segment (not test strings like "test", "hello", "ab")
+    
+    Returns:
+        tuple: (is_valid: bool, error_message: str or None, debug_info: dict or None)
+        If debug=True, returns additional validation details in debug_info
+    """
+    try:
+        # Combine all inputs for validation
+        combined_input = f"Industry: {industry or ''}\nGeography: {geography or ''}\nDetails: {details or ''}"
+        
+        # Create validation prompt
+        validation_prompt = f"""
+You are a content validation system for a market research platform. Analyze the following form inputs and determine if they are acceptable. Note that the only required field is the industry name, geography is optional, and details is optional and details may be empty:
+
+{combined_input}
+
+Validation criteria:
+1. The inputs must NOT contain profanity, offensive language, or dangerous content (weapons, violence, illegal activities)
+2. The industry field must represent a real business industry or market segment. REJECT only obvious test strings like:
+   - Single words like "test", "hello", "hi", "example"
+   - Very short random character combinations like "ab", "xyz", "asdf" 
+   - Just numbers like "123", "456"
+   - Obvious placeholder text
+   
+ACCEPT legitimate industry terms including:
+   - Technology sectors (AI, VR, SaaS, healthcare tech, fintech, etc.)
+   - Traditional industries (manufacturing, retail, healthcare, etc.)
+   - Short but valid industry acronyms (AI, VR, IoT, etc.)
+   - Emerging industries and market segments
+   - Large/open-ended industries that encompass sub-industries
+   - Very niche and sub industries 
+
+Be reasonably permissive - err on the side of accepting legitimate business queries.
+
+Return your analysis in the specified JSON format.
+"""
+
+        response = openai_client.chat.completions.create(
+            model="speed",  # Parallel's fast model
+            messages=[
+                {"role": "user", "content": validation_prompt}
+            ],
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "validation_schema",
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "is_valid": {
+                                "type": "boolean",
+                                "description": "Whether the inputs pass validation"
+                            },
+                            "reasoning": {
+                                "type": "string",
+                                "description": "Detailed reasoning for the validation decision"
+                            },
+                            "issues_found": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "List of specific issues found, if any"
+                            }
+                        },
+                        "required": ["is_valid", "reasoning", "issues_found"]
+                    }
+                }
+            },
+            temperature=0.1,  # Low temperature for consistent validation
+            max_tokens=500
+        )
+        
+        # Parse the response
+        result_content = response.choices[0].message.content
+        validation_result = json.loads(result_content)
+        
+        is_valid = validation_result.get('is_valid', False)
+        reasoning = validation_result.get('reasoning', 'No reasoning provided')
+        issues_found = validation_result.get('issues_found', [])
+        
+        # Prepare debug info
+        debug_info = {
+            'response_id': getattr(response, 'id', 'unknown'),
+            'model': response.model if hasattr(response, 'model') else 'speed',
+            'reasoning': reasoning,
+            'issues_found': issues_found,
+            'raw_response': result_content,
+            'combined_input': combined_input
+        } if debug else None
+        
+        if not is_valid:
+            # Return the standard error message for any validation failure
+            if debug:
+                return False, "Please adjust your inputs to be focused on a specific industry.", debug_info
+            else:
+                return False, "Please adjust your inputs to be focused on a specific industry."
+        
+        if debug:
+            return True, None, debug_info
+        else:
+            return True, None
+        
+    except json.JSONDecodeError as e:
+        print(f"JSON parsing error in validation: {e}")
+        debug_info = {'error': f'JSON parsing error: {e}'} if debug else None
+        # If we can't parse the response, allow the input to be safe
+        if debug:
+            return True, None, debug_info
+        else:
+            return True, None
+        
+    except Exception as e:
+        print(f"Validation error: {e}")
+        debug_info = {'error': f'Validation error: {e}'} if debug else None
+        # If validation fails for any reason, allow the input to be safe
+        if debug:
+            return True, None, debug_info
+        else:
+            return True, None
+
 
 @app.route('/')
 def index():
@@ -706,6 +838,12 @@ def generate_report():
     
     if not industry:
         return jsonify({'error': 'Industry is required'}), 400
+    
+    # Validate form inputs using Parallel's chat completions API
+    validation_result = validate_form_inputs(industry, geography, details)
+    is_valid, validation_error = validation_result[0], validation_result[1]
+    if not is_valid:
+        return jsonify({'error': validation_error}), 400
     
     try:
         # Generate research input
@@ -1398,6 +1536,48 @@ def download_report(slug):
     # Send file
     filename = f"{report['slug']}.md"
     return send_file(temp_file.name, as_attachment=True, download_name=filename)
+
+@app.route('/api/validate-inputs', methods=['POST'])
+def validate_inputs_api():
+    """API endpoint for real-time input validation"""
+    try:
+        data = request.json
+        industry = data.get('industry', '').strip()
+        geography = data.get('geography', '').strip()
+        details = data.get('details', '').strip()
+        
+        # Basic check - industry is required
+        if not industry:
+            return jsonify({
+                'is_valid': False,
+                'message': 'Industry is required',
+                'type': 'required'
+            })
+        
+        # Validate using our AI validation function
+        validation_result = validate_form_inputs(industry, geography, details)
+        is_valid, validation_error = validation_result[0], validation_result[1]
+        
+        if is_valid:
+            return jsonify({
+                'is_valid': True,
+                'message': 'Looks good!',
+                'type': 'success'
+            })
+        else:
+            return jsonify({
+                'is_valid': False,
+                'message': validation_error or 'Please adjust your inputs to be focused on a specific industry.',
+                'type': 'validation_error'
+            })
+            
+    except Exception as e:
+        print(f"Validation API error: {e}")
+        return jsonify({
+            'is_valid': True,  # Default to valid on error to not block users
+            'message': 'Validation unavailable',
+            'type': 'error'
+        })
 
 @app.route('/api/status')
 def api_status():

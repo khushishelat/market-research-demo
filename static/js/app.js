@@ -28,13 +28,8 @@ const App = {
             form.addEventListener('submit', this.handleFormSubmit.bind(this));
         }
         
-        // Input validation (only for authenticated users)
-        if (window.isAuthenticated) {
-            const industryInput = document.getElementById('industry');
-            if (industryInput) {
-                industryInput.addEventListener('input', this.validateIndustryInput.bind(this));
-            }
-        }
+        // Setup validation UI clearing
+        this.setupValidationClearOnInput();
         
         // Geography select
         const geographySelect = document.getElementById('geography');
@@ -77,6 +72,12 @@ const App = {
         const formData = this.getFormData();
         if (!this.validateFormData(formData)) {
             return;
+        }
+        
+        // Validate inputs using AI before submitting
+        const validationPassed = await this.validateBeforeSubmission(formData);
+        if (!validationPassed) {
+            return; // Validation failed, stop submission
         }
         
         this.setLoadingState(true);
@@ -132,6 +133,45 @@ const App = {
         }
         
         return true;
+    },
+    
+    // Validate inputs before submission using AI
+    async validateBeforeSubmission(formData) {
+        // Show validation loading
+        this.showValidationLoading();
+        
+        try {
+            const response = await fetch('/api/validate-inputs', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    industry: formData.industry,
+                    geography: formData.geography,
+                    details: formData.details
+                })
+            });
+            
+            const result = await response.json();
+            
+            if (result.is_valid) {
+                this.showValidationSuccess(result.message);
+                // Give user a moment to see the success message
+                await new Promise(resolve => setTimeout(resolve, 800));
+                this.clearValidationStatus();
+                return true;
+            } else {
+                this.showValidationError(result.message);
+                return false;
+            }
+            
+        } catch (error) {
+            console.error('Validation API error:', error);
+            // On validation error, proceed anyway to not block users
+            this.clearValidationStatus();
+            return true;
+        }
     },
     
     // Generate report via API
@@ -365,28 +405,71 @@ const App = {
         }
     },
     
-    // Validate industry input
+    // Setup validation UI clearing when user starts typing after an error
+    setupValidationClearOnInput() {
+        const industryInput = document.getElementById('industry');
+        if (industryInput) {
+            industryInput.addEventListener('input', () => {
+                const validationMessage = document.getElementById('validation-message');
+                if (validationMessage && validationMessage.classList.contains('error')) {
+                    this.clearValidationStatus();
+                }
+            });
+        }
+    },
+    
+    // Show validation loading state
+    showValidationLoading() {
+        const spinner = document.getElementById('validation-spinner');
+        const message = document.getElementById('validation-message');
+        
+        if (spinner) spinner.classList.remove('d-none');
+        if (message) {
+            message.textContent = 'Checking...';
+            message.className = 'validation-message';
+        }
+    },
+    
+    // Show validation success
+    showValidationSuccess(messageText) {
+        const spinner = document.getElementById('validation-spinner');
+        const message = document.getElementById('validation-message');
+        
+        if (spinner) spinner.classList.add('d-none');
+        if (message) {
+            message.textContent = messageText;
+            message.className = 'validation-message success validation-fade-in';
+        }
+    },
+    
+    // Show validation error
+    showValidationError(messageText) {
+        const spinner = document.getElementById('validation-spinner');
+        const message = document.getElementById('validation-message');
+        
+        if (spinner) spinner.classList.add('d-none');
+        if (message) {
+            message.textContent = messageText;
+            message.className = 'validation-message error validation-fade-in';
+        }
+    },
+    
+    // Clear validation status
+    clearValidationStatus() {
+        const spinner = document.getElementById('validation-spinner');
+        const message = document.getElementById('validation-message');
+        
+        if (spinner) spinner.classList.add('d-none');
+        if (message) {
+            message.textContent = '';
+            message.className = 'validation-message';
+        }
+    },
+
+    // Legacy validate industry input (keeping for backwards compatibility)
     validateIndustryInput(e) {
-        const input = e.target;
-        const value = input.value.trim();
-        
-        // Remove existing feedback
-        const existingFeedback = input.parentNode.querySelectorAll('.invalid-feedback, .valid-feedback');
-        existingFeedback.forEach(feedback => feedback.remove());
-        
-        input.classList.remove('is-invalid', 'is-valid');
-        
-        if (value.length === 0) {
-            return; // Don't validate empty on blur
-        }
-        
-        if (value.length < 2) {
-            this.addValidationFeedback(input, 'Industry name must be at least 2 characters', false);
-        } else if (value.length > 100) {
-            this.addValidationFeedback(input, 'Industry name is too long', false);
-        } else {
-            this.addValidationFeedback(input, 'Looks good!', true);
-        }
+        // This method is now handled by real-time validation above
+        // Keeping for any legacy calls
     },
     
     // Add validation feedback
@@ -928,7 +1011,7 @@ const App = {
         }
         
         // Add initial event
-        this.addSSEEvent('Initializing research session...');
+        this.addSSEEvent('Initializing research progress viewer...');
     },
     
     // Update streaming progress with simple event tracking

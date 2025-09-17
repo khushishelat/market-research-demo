@@ -300,6 +300,12 @@ body {
     position: relative;
 }
 
+.analysis-card.generating-card {
+    position: relative;
+    overflow: hidden;
+    height: 100%;
+}
+
 .analysis-card.generating-card::before {
     content: '';
     position: absolute;
@@ -315,10 +321,6 @@ body {
         rgba(156, 163, 175, 0.05) 30px
     );
     pointer-events: none;
-}
-    position: relative;
-    overflow: hidden;
-    height: 100%;
 }
 
 .company-card:hover, .analysis-card:hover {
@@ -568,6 +570,66 @@ body {
 .form-submitting .form-select:focus {
     border-color: var(--neural);
     box-shadow: none;
+}
+
+/* Validation Status Styles */
+.validation-status {
+    min-height: 40px;
+    padding: 8px 16px;
+    border-radius: 4px;
+    margin-top: 12px;
+    transition: all 0.3s ease;
+}
+
+.validation-message {
+    font-family: 'FT System Mono', monospace;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    text-align: center;
+}
+
+.validation-message.success {
+    color: var(--success-color);
+}
+
+.validation-message.error {
+    color: var(--error-color);
+}
+
+.validation-message.required {
+    color: var(--gray-text);
+}
+
+.validation-spinner {
+    display: inline-flex;
+    align-items: center;
+}
+
+.validation-spinner .spinner-border-sm {
+    width: 16px;
+    height: 16px;
+    border-width: 2px;
+}
+
+/* Smooth fade in/out for validation messages */
+.validation-fade-in {
+    animation: fadeIn 0.3s ease-in;
+}
+
+.validation-fade-out {
+    animation: fadeOut 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeOut {
+    from { opacity: 1; transform: translateY(0); }
+    to { opacity: 0; transform: translateY(-10px); }
 }
 
 /* Grid layouts */
