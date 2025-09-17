@@ -246,6 +246,17 @@ def convert_basis_to_dict(basis):
 
 def save_report(title, slug, industry, geography, details, content, basis=None, task_run_id=None):
     """Complete a task by updating it with final report data"""
+    # Final safety check to prevent NULL values reaching database
+    if not title or not isinstance(title, str):
+        print(f"⚠️  Invalid title detected: {repr(title)}, creating fallback")
+        title = f"Market Research Report {task_run_id[-8:] if task_run_id else 'unknown'}"
+    
+    if not slug or not isinstance(slug, str):
+        print(f"⚠️  Invalid slug detected: {repr(slug)}, creating fallback")
+        slug = f"market-report-{task_run_id[-12:] if task_run_id else 'unknown'}"
+    
+    print(f"💾 Saving report: title='{title}', slug='{slug}', task_run_id='{task_run_id}'")
+    
     conn = get_db_connection()
     cursor = conn.cursor()
     
@@ -364,10 +375,83 @@ def save_report(title, slug, industry, geography, details, content, basis=None, 
         cursor.close()
         conn.close()
 
-def get_report_by_slug(slug):
-    """Get report by slug (public access)"""
+def repair_null_slug_report(task_run_id):
+    """Repair a report with NULL slug using available data"""
     conn = get_db_connection()
     cursor = conn.cursor()
+    
+    try:
+        # Get the report with NULL title/slug
+        cursor.execute('''
+            SELECT industry, geography, content 
+            FROM reports 
+            WHERE task_run_id = %s AND (title IS NULL OR slug IS NULL) AND content IS NOT NULL
+        ''', (task_run_id,))
+        
+        result = cursor.fetchone()
+        if not result:
+            return None
+            
+        # Generate title and slug from available data
+        industry = result['industry'] or f"Report {task_run_id[-8:]}"
+        geography = result['geography']
+        
+        title = f"{industry} Market Research Report"
+        if geography and geography.strip() and geography != "Not specified":
+            title += f" - {geography}"
+            
+        slug = create_slug(title)
+        
+        # Update the record
+        cursor.execute('''
+            UPDATE reports 
+            SET title = %s, slug = %s 
+            WHERE task_run_id = %s
+        ''', (title, slug, task_run_id))
+        
+        conn.commit()
+        print(f"🔧 Auto-repaired NULL slug report {task_run_id}: title='{title}', slug='{slug}'")
+        
+        cursor.close()
+        conn.close()
+        return {'title': title, 'slug': slug}
+        
+    except Exception as e:
+        print(f"❌ Failed to repair NULL slug report {task_run_id}: {e}")
+        conn.rollback()
+        cursor.close()
+        conn.close()
+        return None
+
+def get_report_by_slug(slug):
+    """Get report by slug (public access) with auto-repair for broken links"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Handle broken email links from NULL slug reports
+    if slug == "None":
+        print("🔧 Detected broken email link (/report/None), searching for NULL slug report to repair...")
+        
+        # Find the most recent NULL slug report
+        cursor.execute('''
+            SELECT task_run_id, industry, geography
+            FROM reports 
+            WHERE slug IS NULL AND content IS NOT NULL AND status = 'completed'
+            ORDER BY completed_at DESC
+            LIMIT 1
+        ''', ())
+        
+        null_result = cursor.fetchone()
+        if null_result:
+            task_run_id = null_result['task_run_id']
+            print(f"🔧 Found NULL slug report {task_run_id}, attempting auto-repair...")
+            
+            # Try to repair it
+            repair_result = repair_null_slug_report(task_run_id)
+            if repair_result:
+                # Successfully repaired, use the new slug
+                slug = repair_result['slug']
+                print(f"✅ Auto-repaired and redirecting to: /report/{slug}")
     
     cursor.execute('''
         SELECT id, title, industry, geography, details, content, basis, created_at, task_run_id
@@ -895,12 +979,22 @@ def monitor_task_with_sse(task_run_id):
                 content = getattr(run_result.output, "content", "No content found.")
                 basis = getattr(run_result.output, "basis", None)
                 
-                # Create and save report
-                title = f"{task_metadata['industry']} Market Research Report"
-                if task_metadata['geography'] and task_metadata['geography'] != "Not specified":
-                    title += f" - {task_metadata['geography']}"
-                
-                slug = create_slug(title)
+                # Create and save report with error handling
+                try:
+                    title = f"{task_metadata['industry']} Market Research Report"
+                    if task_metadata['geography'] and task_metadata['geography'] != "Not specified":
+                        title += f" - {task_metadata['geography']}"
+                    
+                    slug = create_slug(title)
+                    print(f"✅ Generated title='{title}', slug='{slug}' for task {task_run_id}")
+                    
+                except Exception as e:
+                    print(f"❌ Title/slug generation failed for task {task_run_id}: {e}")
+                    print(f"❌ task_metadata: {task_metadata}")
+                    # Create fallback title/slug to prevent NULL
+                    title = f"Market Research Report {task_run_id[-8:]}"
+                    slug = f"market-report-{task_run_id[-12:]}"
+                    print(f"🔧 Using fallback title='{title}', slug='{slug}'")
                 
                 report_id = save_report(
                     title, slug,
@@ -1119,11 +1213,22 @@ def monitor_task_completion(task_run_id, task_metadata):
                 content = getattr(run_result.output, "content", "No content found.")
                 basis = getattr(run_result.output, "basis", None)
                 
-                title = f"{task_metadata['industry']} Market Research Report"
-                if task_metadata['geography'] and task_metadata['geography'] != "Not specified":
-                    title += f" - {task_metadata['geography']}"
-                
-                slug = create_slug(title)
+                # Create title and slug with error handling
+                try:
+                    title = f"{task_metadata['industry']} Market Research Report"
+                    if task_metadata['geography'] and task_metadata['geography'] != "Not specified":
+                        title += f" - {task_metadata['geography']}"
+                    
+                    slug = create_slug(title)
+                    print(f"✅ Background monitor generated title='{title}', slug='{slug}' for task {task_run_id}")
+                    
+                except Exception as e:
+                    print(f"❌ Background monitor title/slug generation failed for task {task_run_id}: {e}")
+                    print(f"❌ task_metadata: {task_metadata}")
+                    # Create fallback title/slug to prevent NULL
+                    title = f"Market Research Report {task_run_id[-8:]}"
+                    slug = f"market-report-{task_run_id[-12:]}"
+                    print(f"🔧 Background monitor using fallback title='{title}', slug='{slug}'")
                 
                 report_id = save_report(
                     title, slug, 
@@ -1191,12 +1296,22 @@ def complete_task(task_run_id):
         content = getattr(run_result.output, "content", "No content found.")
         basis = getattr(run_result.output, "basis", None)
         
-        # Create title and slug
-        title = f"{task_metadata['industry']} Market Research Report"
-        if task_metadata['geography'] and task_metadata['geography'] != "Not specified":
-            title += f" - {task_metadata['geography']}"
-        
-        slug = create_slug(title)
+        # Create title and slug with error handling
+        try:
+            title = f"{task_metadata['industry']} Market Research Report"
+            if task_metadata['geography'] and task_metadata['geography'] != "Not specified":
+                title += f" - {task_metadata['geography']}"
+            
+            slug = create_slug(title)
+            print(f"✅ Complete task generated title='{title}', slug='{slug}' for task {task_run_id}")
+            
+        except Exception as e:
+            print(f"❌ Complete task title/slug generation failed for task {task_run_id}: {e}")
+            print(f"❌ task_metadata: {task_metadata}")
+            # Create fallback title/slug to prevent NULL
+            title = f"Market Research Report {task_run_id[-8:]}"
+            slug = f"market-report-{task_run_id[-12:]}"
+            print(f"🔧 Complete task using fallback title='{title}', slug='{slug}'")
         
         # Save report
         report_id = save_report(
@@ -1238,6 +1353,20 @@ def view_report(slug):
         return render_template('404.html'), 404
     
     return render_template('report.html', report=report)
+
+@app.route('/repair-report/<task_run_id>')
+def repair_report_endpoint(task_run_id):
+    """Manual repair endpoint for reports with NULL title/slug"""
+    repair_result = repair_null_slug_report(task_run_id)
+    
+    if repair_result:
+        # Redirect to the repaired report
+        return redirect(f"/report/{repair_result['slug']}")
+    else:
+        return jsonify({
+            'error': 'Failed to repair report. Report may not exist or may not need repair.',
+            'task_run_id': task_run_id
+        }), 404
 
 @app.route('/download/<slug>')
 def download_report(slug):
@@ -1317,7 +1446,6 @@ def get_library_html():
                 </div>
                 
                 <div class="company-name" style="color: #6B7280;">{{ task.industry|e }} Market Research Report{% if task.geography %} - {{ task.geography|e }}{% endif %}</div>
-                <div class="company-domain" style="color: #9CA3AF;">{{ task.industry|e }}{% if task.geography %} • {{ task.geography|e }}{% endif %}</div>
                 
                 <div class="company-description" style="color: #9CA3AF;">
                     <i class="fas fa-hourglass-half me-2"></i>AI is currently researching market trends, competitive landscape, and strategic insights for the {{ task.industry|e }} sector{% if task.geography %} in {{ task.geography|e }}{% endif %}...
@@ -1325,7 +1453,7 @@ def get_library_html():
                 
                 <div class="d-flex justify-content-between align-items-center">
                     <div class="company-category" style="background-color: #F3F4F6; color: #6B7280; border: 1px dashed #D1D5DB;">Generating...</div>
-                    <div class="view-count" style="color: #9CA3AF;">
+                    <div class="task-time" style="color: #9CA3AF;">
                         <i class="fas fa-clock"></i>
                         <span>Started {{ task.created_at.strftime('%I:%M %p') }}</span>
                     </div>
@@ -1347,16 +1475,11 @@ def get_library_html():
                 </div>
                 
                 <div class="company-name">{{ report.industry }}</div>
-                <div class="company-domain">{{ report.slug }}</div>
                 
                 <div class="company-description">{{ report.industry }} market analysis with comprehensive competitive intelligence and strategic insights.</div>
                 
-                <div class="d-flex justify-content-between align-items-center">
+                <div class="d-flex align-items-center">
                     <div class="company-category">MARKET RESEARCH</div>
-                    <div class="view-count">
-                        <i class="fas fa-eye"></i>
-                        <span>{{ report.view_count }} views</span>
-                    </div>
                 </div>
                 
                 <div class="mt-3">
@@ -1375,14 +1498,9 @@ def get_library_html():
                     <i class="fas fa-layer-group"></i>
                 </div>
                 <div class="company-name">StackOne Technologies LTD</div>
-                <div class="company-domain">stackone.com</div>
                 <div class="company-description">StackOne provides API integration solutions for HR and ATS systems, offering unified access to multiple platforms.</div>
-                <div class="d-flex justify-content-between align-items-center">
+                <div class="d-flex align-items-center">
                     <div class="company-category">SAMPLE</div>
-                    <div class="view-count">
-                        <i class="fas fa-eye"></i>
-                        <span>42 views</span>
-                    </div>
                 </div>
                 <div class="mt-3">
                     <button class="btn btn-outline-secondary btn-sm w-100" disabled>
@@ -1428,11 +1546,22 @@ def get_active_tasks_api():
                 content = getattr(run_result.output, "content", "No content found.")
                 basis = getattr(run_result.output, "basis", None)
                 
-                title = f"{task['industry']} Market Research Report"
-                if task['geography'] and task['geography'] != "Not specified":
-                    title += f" - {task['geography']}"
-                
-                slug = create_slug(title)
+                # Create title and slug with error handling
+                try:
+                    title = f"{task['industry']} Market Research Report"
+                    if task['geography'] and task['geography'] != "Not specified":
+                        title += f" - {task['geography']}"
+                    
+                    slug = create_slug(title)
+                    print(f"✅ API generated title='{title}', slug='{slug}' for task {task['task_run_id']}")
+                    
+                except Exception as e:
+                    print(f"❌ API title/slug generation failed for task {task['task_run_id']}: {e}")
+                    print(f"❌ task data: {task}")
+                    # Create fallback title/slug to prevent NULL
+                    title = f"Market Research Report {task['task_run_id'][-8:]}"
+                    slug = f"market-report-{task['task_run_id'][-12:]}"
+                    print(f"🔧 API using fallback title='{title}', slug='{slug}'")
                 
                 report_id = save_report(
                     title, slug, 

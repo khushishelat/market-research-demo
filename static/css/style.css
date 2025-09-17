@@ -356,12 +356,6 @@ body {
     font-family: 'FT System Mono', monospace;
 }
 
-.company-domain {
-    font-size: 12px;
-    color: var(--gray-text);
-    margin-bottom: 1rem;
-    font-family: 'FT System Mono', monospace;
-}
 
 .company-description {
     font-size: 13px;
@@ -379,7 +373,7 @@ body {
     letter-spacing: 0.5px;
 }
 
-.view-count {
+.task-time {
     font-size: 11px;
     color: var(--gray-text);
     font-weight: 400;
@@ -703,15 +697,6 @@ kbd {
     font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-}
-
-.view-badge {
-    background-color: var(--primary-light);
-    color: var(--signal);
-    padding: 4px 8px;
-    border-radius: 3px;
-    font-size: 12px;
-    font-weight: 500;
 }
 
 /* Modals */
