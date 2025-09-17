@@ -112,7 +112,8 @@ const App = {
         return {
             industry: document.getElementById('industry')?.value.trim() || '',
             geography: document.getElementById('geography')?.value || '',
-            details: document.getElementById('details')?.value.trim() || ''
+            details: document.getElementById('details')?.value.trim() || '',
+            email: document.getElementById('email')?.value.trim() || ''
         };
     },
     

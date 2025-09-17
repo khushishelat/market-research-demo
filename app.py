@@ -32,6 +32,10 @@ if not PARALLEL_API_KEY:
 
 client = Parallel(api_key=PARALLEL_API_KEY)
 
+# Email configuration
+RESEND_API_KEY = os.getenv('RESEND_API_KEY')
+BASE_URL = os.getenv('BASE_URL', 'https://aimarketresearch.app')
+
 # Configuration
 MAX_REPORTS_PER_HOUR = 100  # Global rate limit: 100 reports per hour
 
@@ -117,6 +121,57 @@ def record_report_generation():
     conn.commit()
     cursor.close()
     conn.close()
+
+def send_report_ready_email(email, report_title, report_slug, task_id):
+    """Send email notification when report is ready using Resend API"""
+    if not RESEND_API_KEY or not email:
+        print(f"Skipping email: RESEND_API_KEY={'present' if RESEND_API_KEY else 'missing'}, email={'present' if email else 'missing'}")
+        return False
+    
+    try:
+        # Build the report URL
+        report_url = f"{BASE_URL}/report/{report_slug}"
+        
+        # Render the email HTML template
+        html_content = render_template(
+            'email_report_ready.html',
+            report_title=report_title,
+            report_url=report_url,
+            task_id=task_id
+        )
+        
+        # Prepare email data
+        email_data = {
+            "from": "Acme <updates@aimarketresearch.app>",
+            "to": [email],
+            "subject": "Market Research report is now available",
+            "html": html_content,
+            "reply_to": "updates@aimarketresearch.app"
+        }
+        
+        # Send email via Resend API
+        headers = {
+            'Authorization': f'Bearer {RESEND_API_KEY}',
+            'Content-Type': 'application/json'
+        }
+        
+        response = requests.post(
+            'https://api.resend.com/emails',
+            headers=headers,
+            json=email_data,
+            timeout=30
+        )
+        
+        if response.status_code == 200:
+            print(f"✅ Email sent successfully to {email} for report {report_slug}")
+            return True
+        else:
+            print(f"❌ Email failed: {response.status_code} - {response.text}")
+            return False
+            
+    except Exception as e:
+        print(f"❌ Email sending error: {e}")
+        return False
 
 def create_slug(title):
     """Create URL-friendly slug from title"""
@@ -236,6 +291,24 @@ def save_report(title, slug, industry, geography, details, content, basis=None, 
         
         conn.commit()
         print(f"Successfully completed task {task_run_id} with report {report_id}")
+        
+        # Send email notification if email was provided during task creation
+        try:
+            cursor = conn.cursor()
+            cursor.execute('SELECT email FROM reports WHERE task_run_id = %s', (task_run_id,))
+            email_result = cursor.fetchone()
+            cursor.close()
+            
+            if email_result and email_result['email']:
+                email = email_result['email']
+                print(f"Sending report ready email to {email}")
+                send_report_ready_email(email, title, slug, task_run_id)
+            else:
+                print("No email provided for this task, skipping email notification")
+        except Exception as e:
+            print(f"Error sending email notification: {e}")
+            # Don't fail the report saving if email fails
+        
         return report_id
         
     except psycopg2.IntegrityError as e:
@@ -263,6 +336,24 @@ def save_report(title, slug, industry, geography, details, content, basis=None, 
             
             conn.commit()
             print(f"Successfully completed task {task_run_id} with adjusted slug {slug}")
+            
+            # Send email notification if email was provided during task creation
+            try:
+                cursor = conn.cursor()
+                cursor.execute('SELECT email FROM reports WHERE task_run_id = %s', (task_run_id,))
+                email_result = cursor.fetchone()
+                cursor.close()
+                
+                if email_result and email_result['email']:
+                    email = email_result['email']
+                    print(f"Sending report ready email to {email}")
+                    send_report_ready_email(email, title, slug, task_run_id)
+                else:
+                    print("No email provided for this task, skipping email notification")
+            except Exception as e:
+                print(f"Error sending email notification: {e}")
+                # Don't fail the report saving if email fails
+            
             return report_id
         else:
             raise e
@@ -334,9 +425,9 @@ def get_all_public_reports():
         'created_at': row['created_at']
     } for row in results]
 
-def save_running_task(task_run_id, industry, geography, details, session_id):
+def save_running_task(task_run_id, industry, geography, details, session_id, email=None):
     """Save running task to unified reports table"""
-    print(f"DEBUG: save_running_task called with: {task_run_id}, {industry}, {geography}, {details}, {session_id}")
+    print(f"DEBUG: save_running_task called with: {task_run_id}, {industry}, {geography}, {details}, {session_id}, {email}")
     conn = get_db_connection()
     cursor = conn.cursor()
     
@@ -347,15 +438,15 @@ def save_running_task(task_run_id, industry, geography, details, session_id):
             # Update existing task
             cursor.execute('''
                 UPDATE reports 
-                SET status = 'running', created_at = CURRENT_TIMESTAMP
+                SET status = 'running', created_at = CURRENT_TIMESTAMP, email = %s
                 WHERE task_run_id = %s
-            ''', (task_run_id,))
+            ''', (email, task_run_id))
         else:
             # Insert new task (id will be NULL for running tasks)
             cursor.execute('''
-                INSERT INTO reports (task_run_id, industry, geography, details, status, session_id)
-                VALUES (%s, %s, %s, %s, 'running', %s)
-            ''', (task_run_id, industry, geography, details, session_id))
+                INSERT INTO reports (task_run_id, industry, geography, details, status, session_id, email)
+                VALUES (%s, %s, %s, %s, 'running', %s, %s)
+            ''', (task_run_id, industry, geography, details, session_id, email))
         
         rows_affected = cursor.rowcount
         conn.commit()
@@ -527,6 +618,7 @@ def generate_report():
     industry = data.get('industry', '').strip()
     geography = data.get('geography', '').strip()
     details = data.get('details', '').strip()
+    email = data.get('email', '').strip() if data.get('email') else None
     
     if not industry:
         return jsonify({'error': 'Industry is required'}), 400
@@ -558,8 +650,8 @@ def generate_report():
         session[f'task_{task_run.run_id}'] = task_metadata
         
         # Use task_run_id as the session identifier (much simpler!)
-        save_running_task(task_run.run_id, industry, geography, details, task_run.run_id)
-        print(f"Generate report - saving task {task_run.run_id} with session_id: {task_run.run_id}")
+        save_running_task(task_run.run_id, industry, geography, details, task_run.run_id, email)
+        print(f"Generate report - saving task {task_run.run_id} with session_id: {task_run.run_id}, email: {email}")
         
         # Start background monitoring thread as ultimate fallback
         monitor_thread = threading.Thread(
@@ -643,7 +735,9 @@ def stream_task_events(task_id, api_key):
     stream_url = f"https://api.parallel.ai/v1beta/tasks/runs/{task_id}/events"
     
     try:
-        with requests.get(stream_url, headers=headers, stream=True, timeout=30) as response:
+        # Use separate timeouts: (connection_timeout, read_timeout)
+        # Connection: 10s (should be fast), Read: 300s (allow for natural gaps in task processing)
+        with requests.get(stream_url, headers=headers, stream=True, timeout=(10, 300)) as response:
             response.raise_for_status()
             
             current_event_type = None
