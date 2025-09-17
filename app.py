@@ -34,10 +34,14 @@ if not PARALLEL_API_KEY:
 client = Parallel(api_key=PARALLEL_API_KEY)
 
 # Initialize OpenAI client for Parallel's chat completions API (used for validation)
-openai_client = OpenAI(
-    api_key=PARALLEL_API_KEY,
-    base_url="https://api.parallel.ai"
-)
+try:
+    openai_client = OpenAI(
+        api_key=PARALLEL_API_KEY,
+        base_url="https://api.parallel.ai"
+    )
+except Exception as e:
+    print(f"Warning: Failed to initialize OpenAI client: {e}")
+    openai_client = None
 
 # Email configuration
 RESEND_API_KEY = os.getenv('RESEND_API_KEY')
@@ -680,6 +684,14 @@ def validate_form_inputs(industry, geography, details, debug=False):
         tuple: (is_valid: bool, error_message: str or None, debug_info: dict or None)
         If debug=True, returns additional validation details in debug_info
     """
+    # If OpenAI client failed to initialize, skip validation and allow input
+    if openai_client is None:
+        print("Warning: OpenAI client not available, skipping validation")
+        if debug:
+            return True, None, {'error': 'OpenAI client not available'}
+        else:
+            return True, None
+    
     try:
         # Combine all inputs for validation
         combined_input = f"Industry: {industry or ''}\nGeography: {geography or ''}\nDetails: {details or ''}"
