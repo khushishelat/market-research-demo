@@ -37,7 +37,9 @@ client = Parallel(api_key=PARALLEL_API_KEY)
 try:
     openai_client = OpenAI(
         api_key=PARALLEL_API_KEY,
-        base_url="https://api.parallel.ai"
+        base_url="https://api.parallel.ai",
+        timeout=30.0,
+        max_retries=3
     )
 except Exception as e:
     print(f"Warning: Failed to initialize OpenAI client: {e}")
@@ -684,11 +686,23 @@ def validate_form_inputs(industry, geography, details, debug=False):
         tuple: (is_valid: bool, error_message: str or None, debug_info: dict or None)
         If debug=True, returns additional validation details in debug_info
     """
-    # If OpenAI client failed to initialize, skip validation and allow input
+    # If OpenAI client failed to initialize, use basic fallback validation
     if openai_client is None:
-        print("Warning: OpenAI client not available, skipping validation")
+        print("Warning: OpenAI client not available, using basic validation")
+        # Basic validation: reject obvious test strings
+        industry_lower = industry.lower().strip()
+        
+        # Reject obvious test strings
+        test_strings = ['test', 'hello', 'hi', 'example', 'abc', 'xyz', 'asdf', 'qwerty', 'kjhjkhkjh']
+        if industry_lower in test_strings or len(industry_lower) < 2 or industry_lower.isdigit():
+            if debug:
+                return False, "Please enter a real industry name.", {'error': 'Basic validation failed'}
+            else:
+                return False, "Please enter a real industry name."
+        
+        # Allow anything else when OpenAI is not available
         if debug:
-            return True, None, {'error': 'OpenAI client not available'}
+            return True, None, {'error': 'OpenAI client not available, used basic validation'}
         else:
             return True, None
     
