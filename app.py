@@ -7,7 +7,7 @@ import requests
 import threading
 import time
 from typing import Dict, Any, Optional
-from flask import Flask, render_template, request, jsonify, redirect, url_for, session, send_file, Response, stream_template
+from flask import Flask, render_template, request, jsonify, redirect, url_for, session, send_file, Response, stream_template, render_template_string
 from werkzeug.utils import secure_filename
 import tempfile
 from dotenv import load_dotenv
@@ -79,41 +79,19 @@ def get_db_connection():
     """Get a database connection"""
     return psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
 
-def init_database():
-    """Initialize PostgreSQL database for storing reports and global rate limiting"""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    # Create reports table (simplified for anonymous users)
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS reports (
-            id TEXT PRIMARY KEY,
-            title TEXT NOT NULL,
-            slug TEXT UNIQUE NOT NULL,
-            industry TEXT NOT NULL,
-            geography TEXT,
-            details TEXT,
-            content TEXT NOT NULL,
-            basis TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            status TEXT DEFAULT 'completed',
-            is_public BOOLEAN DEFAULT TRUE,
-            task_run_id TEXT
-        )
-    ''')
-    
-    # Global rate limiting table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS rate_limit (
-            id SERIAL PRIMARY KEY,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-    
-    conn.commit()
-    cursor.close()
-    conn.close()
-
+def verify_database_connection():
+    """Simple database connection test"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT 1')
+        cursor.close()
+        conn.close()
+        print("✅ Database connection verified")
+        return True
+    except Exception as e:
+        print(f"❌ Database connection failed: {e}")
+        return False
 
 def get_recent_report_count():
     """Get the number of reports generated in the last hour (global rate limiting)"""
@@ -212,22 +190,20 @@ def convert_basis_to_dict(basis):
     return result
 
 def save_report(title, slug, industry, geography, details, content, basis=None, task_run_id=None):
-    """Save report to database with atomic duplicate prevention"""
+    """Complete a task by updating it with final report data"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
     try:
-        # First check if a report already exists for this task_run_id
+        # Check if task already completed AND has content (skip only if fully complete)
         if task_run_id:
-            cursor.execute('SELECT id FROM reports WHERE task_run_id = %s', (task_run_id,))
-            existing_report = cursor.fetchone()
-            if existing_report:
-                print(f"Report already exists for task {task_run_id}, skipping duplicate save")
+            cursor.execute('SELECT status, content FROM reports WHERE task_run_id = %s', (task_run_id,))
+            existing_task = cursor.fetchone()
+            if existing_task and existing_task['status'] == 'completed' and existing_task['content'] is not None:
+                print(f"Task {task_run_id} already completed with content, skipping duplicate save")
                 cursor.close()
                 conn.close()
-                return existing_report['id']
-        
-        report_id = str(uuid.uuid4())
+                return task_run_id  # Return task_run_id as report_id
         
         # Convert basis to JSON string if provided
         basis_json = None
@@ -239,13 +215,27 @@ def save_report(title, slug, industry, geography, details, content, basis=None, 
                 print(f"Error converting basis to JSON: {e}")
                 basis_json = None
         
+        # Generate unique ID for slug conflicts
+        report_id = str(uuid.uuid4())
+        
+        # Update existing running task to completed status
         cursor.execute('''
-            INSERT INTO reports (id, title, slug, industry, geography, details, content, basis, is_public, task_run_id)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        ''', (report_id, title, slug, industry, geography, details, content, basis_json, True, task_run_id))
+            UPDATE reports 
+            SET id = %s, title = %s, slug = %s, content = %s, basis = %s, 
+                status = 'completed', completed_at = CURRENT_TIMESTAMP,
+                is_public = TRUE
+            WHERE task_run_id = %s
+        ''', (report_id, title, slug, content, basis_json, task_run_id))
+        
+        if cursor.rowcount == 0:
+            # Task doesn't exist, create new completed report
+            cursor.execute('''
+                INSERT INTO reports (id, task_run_id, title, slug, industry, geography, details, content, basis, status, completed_at, is_public)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'completed', CURRENT_TIMESTAMP, TRUE)
+            ''', (report_id, task_run_id, title, slug, industry, geography, details, content, basis_json))
         
         conn.commit()
-        print(f"Successfully saved new report {report_id} for task {task_run_id}")
+        print(f"Successfully completed task {task_run_id} with report {report_id}")
         return report_id
         
     except psycopg2.IntegrityError as e:
@@ -264,11 +254,15 @@ def save_report(title, slug, industry, geography, details, content, basis=None, 
             
             # Retry with new slug
             cursor.execute('''
-                INSERT INTO reports (id, title, slug, industry, geography, details, content, basis, is_public, task_run_id)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            ''', (report_id, title, slug, industry, geography, details, content, basis_json, True, task_run_id))
+                UPDATE reports 
+                SET id = %s, title = %s, slug = %s, content = %s, basis = %s, 
+                    status = 'completed', completed_at = CURRENT_TIMESTAMP,
+                    is_public = TRUE
+                WHERE task_run_id = %s
+            ''', (report_id, title, slug, content, basis_json, task_run_id))
+            
             conn.commit()
-            print(f"Successfully saved report {report_id} with adjusted slug {slug} for task {task_run_id}")
+            print(f"Successfully completed task {task_run_id} with adjusted slug {slug}")
             return report_id
         else:
             raise e
@@ -323,7 +317,7 @@ def get_all_public_reports():
     
     cursor.execute('''
         SELECT id, title, slug, industry, geography, created_at
-        FROM reports WHERE is_public = %s
+        FROM reports WHERE is_public = %s AND status = 'completed'
         ORDER BY created_at DESC
     ''', (True,))
     
@@ -333,6 +327,157 @@ def get_all_public_reports():
     
     return [{
         'id': row['id'],
+        'title': row['title'],
+        'slug': row['slug'],
+        'industry': row['industry'],
+        'geography': row['geography'],
+        'created_at': row['created_at']
+    } for row in results]
+
+def save_running_task(task_run_id, industry, geography, details, session_id):
+    """Save running task to unified reports table"""
+    print(f"DEBUG: save_running_task called with: {task_run_id}, {industry}, {geography}, {details}, {session_id}")
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        # Check if task already exists
+        cursor.execute('SELECT task_run_id FROM reports WHERE task_run_id = %s', (task_run_id,))
+        if cursor.fetchone():
+            # Update existing task
+            cursor.execute('''
+                UPDATE reports 
+                SET status = 'running', created_at = CURRENT_TIMESTAMP
+                WHERE task_run_id = %s
+            ''', (task_run_id,))
+        else:
+            # Insert new task (id will be NULL for running tasks)
+            cursor.execute('''
+                INSERT INTO reports (task_run_id, industry, geography, details, status, session_id)
+                VALUES (%s, %s, %s, %s, 'running', %s)
+            ''', (task_run_id, industry, geography, details, session_id))
+        
+        rows_affected = cursor.rowcount
+        conn.commit()
+        print(f"SUCCESS: Saved running task {task_run_id} to reports table (rows affected: {rows_affected})")
+        
+        # Verify it was saved
+        cursor.execute('SELECT status FROM reports WHERE task_run_id = %s', (task_run_id,))
+        result = cursor.fetchone()
+        print(f"VERIFY: Task {task_run_id} status in DB: {result['status'] if result else 'NOT FOUND'}")
+        
+    except Exception as e:
+        print(f"ERROR saving running task {task_run_id}: {e}")
+        print(f"ERROR details: {type(e).__name__}: {str(e)}")
+        conn.rollback()
+    finally:
+        cursor.close()
+        conn.close()
+
+def get_running_tasks():
+    """Get all running tasks from unified reports table"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Clean up old orphaned running tasks (older than 4 hours)
+    four_hours_ago = datetime.datetime.now() - datetime.timedelta(hours=4)
+    cursor.execute('''
+        UPDATE reports 
+        SET status = 'failed', error_message = 'Task timed out', completed_at = CURRENT_TIMESTAMP
+        WHERE status = 'running' AND created_at < %s
+    ''', (four_hours_ago,))
+    
+    # Get all running tasks
+    cursor.execute('''
+        SELECT task_run_id, industry, geography, details, created_at
+        FROM reports 
+        WHERE status = 'running'
+        ORDER BY created_at DESC
+    ''')
+    
+    results = cursor.fetchall()
+    
+    conn.commit()
+    cursor.close()
+    conn.close()
+    
+    return [{
+        'task_run_id': row['task_run_id'],
+        'industry': row['industry'],
+        'geography': row['geography'],
+        'details': row['details'],
+        'created_at': row['created_at']
+    } for row in results]
+
+def update_task_status(task_run_id, status, error_message=None):
+    """Update task status in unified reports table"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('''
+            UPDATE reports 
+            SET status = %s, 
+                completed_at = CASE WHEN %s != 'running' THEN CURRENT_TIMESTAMP ELSE completed_at END,
+                error_message = %s
+            WHERE task_run_id = %s
+        ''', (status, status, error_message, task_run_id))
+        
+        conn.commit()
+        print(f"Updated task {task_run_id} status to: {status}")
+    except Exception as e:
+        print(f"Error updating task {task_run_id} status: {e}")
+        conn.rollback()
+    finally:
+        cursor.close()
+        conn.close()
+
+def check_task_exists_session_independent(task_run_id):
+    """Check if task exists without session dependency"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Check if task exists in reports table
+    cursor.execute('SELECT industry, geography, details, status FROM reports WHERE task_run_id = %s', (task_run_id,))
+    result = cursor.fetchone()
+    
+    cursor.close()
+    conn.close()
+    
+    if result:
+        return {
+            'industry': result['industry'],
+            'geography': result['geography'],
+            'details': result['details'],
+            'status': result['status']
+        }
+    return None
+
+def get_recently_completed_reports_for_session(session_id):
+    """Get recently completed reports for a session (last 24 hours)"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Get reports completed in last 24 hours that were started by this session
+    one_day_ago = datetime.datetime.now() - datetime.timedelta(hours=24)
+    
+    cursor.execute('''
+        SELECT r.title, r.slug, r.industry, r.geography, r.created_at
+        FROM reports r
+        WHERE r.task_run_id IN (
+            SELECT task_run_id FROM active_tasks 
+            WHERE session_id = %s AND created_at > %s
+        )
+        AND r.created_at > %s
+        ORDER BY r.created_at DESC
+        LIMIT 5
+    ''', (session_id, one_day_ago, one_day_ago))
+    
+    results = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    
+    return [{
         'title': row['title'],
         'slug': row['slug'],
         'industry': row['industry'],
@@ -351,10 +496,19 @@ def index():
     # Get current rate limit status
     recent_report_count = get_recent_report_count()
     
+    # Get ALL running tasks (since each task_run_id is its own "session")
+    active_tasks_for_library = get_running_tasks()
+    recently_completed = []  # Simplify for now
+    
+    # Debug logging
+    print(f"Index route - active_tasks found: {len(active_tasks_for_library)}")
+    
     return render_template('index.html', 
                          recent_report_count=recent_report_count,
                          max_reports_per_hour=MAX_REPORTS_PER_HOUR,
-                         public_reports=public_reports)
+                         public_reports=public_reports,
+                         recently_completed=recently_completed,
+                         active_tasks=active_tasks_for_library)
 
 @app.route('/generate-report', methods=['POST'])
 def generate_report():
@@ -403,6 +557,10 @@ def generate_report():
         # Store in session for completion handling
         session[f'task_{task_run.run_id}'] = task_metadata
         
+        # Use task_run_id as the session identifier (much simpler!)
+        save_running_task(task_run.run_id, industry, geography, details, task_run.run_id)
+        print(f"Generate report - saving task {task_run.run_id} with session_id: {task_run.run_id}")
+        
         # Start background monitoring thread as ultimate fallback
         monitor_thread = threading.Thread(
             target=monitor_task_completion,
@@ -435,12 +593,15 @@ def stream_events(task_run_id):
     
     task_metadata = session.get(f'task_{task_run_id}')
     if not task_metadata:
-        print(f"SSE: Task metadata not found for {task_run_id}")
-        def not_found_error():
-            yield f"data: {json.dumps({'type': 'error', 'message': 'Task not found'})}\n\n"
-        response = Response(not_found_error(), mimetype='text/event-stream')
-        response.headers['Cache-Control'] = 'no-cache'
-        return response
+        # Try to get from database for session-independent access
+        task_metadata = check_task_exists_session_independent(task_run_id)
+        if not task_metadata:
+            print(f"SSE: Task metadata not found for {task_run_id}")
+            def not_found_error():
+                yield f"data: {json.dumps({'type': 'error', 'message': 'Task not found'})}\n\n"
+            response = Response(not_found_error(), mimetype='text/event-stream')
+            response.headers['Cache-Control'] = 'no-cache'
+            return response
     
     print(f"SSE: Starting stream for task {task_run_id}")
     
@@ -606,10 +767,13 @@ def monitor_task_with_sse(task_run_id):
     - Fetch final result after completion
     """
     try:
-        # Check if task exists
+        # Check if task exists in session first, then database
         task_metadata = session.get(f'task_{task_run_id}')
         if not task_metadata:
-            return jsonify({'error': 'Task not found'}), 404
+            # Try to get from database for session-independent access
+            task_metadata = check_task_exists_session_independent(task_run_id)
+            if not task_metadata:
+                return jsonify({'error': 'Task not found'}), 404
         
         # Monitor with exponential backoff
         task_completed, final_status, error_msg = monitor_task_completion_robust(
@@ -660,6 +824,7 @@ def monitor_task_with_sse(task_run_id):
                 session.pop(f'task_{task_run_id}', None)
                 if task_run_id in active_tasks:
                     del active_tasks[task_run_id]
+                # Status already updated to 'completed' by save_report function
                 
                 return jsonify({
                     'success': True,
@@ -788,10 +953,13 @@ def is_recoverable_error(error_message):
 def get_task_status(task_run_id):
     """Get current task status for polling fallback"""
     try:
-        # Check if task exists
+        # Check if task exists in session first, then database
         task_metadata = session.get(f'task_{task_run_id}')
         if not task_metadata:
-            return jsonify({'error': 'Task not found'}), 404
+            # Try to get from database for session-independent access
+            task_metadata = check_task_exists_session_independent(task_run_id)
+            if not task_metadata:
+                return jsonify({'error': 'Task not found'}), 404
         
         # Get task status from Parallel API
         try:
@@ -877,10 +1045,13 @@ def monitor_task_completion(task_run_id, task_metadata):
                 
                 print(f"Background monitor saved report {report_id} for task {task_run_id}")
                 
+                # Task completed successfully - status already updated by save_report
+                
             except Exception as e:
                 print(f"Error saving report in background monitor for task {task_run_id}: {e}")
+                print(f"Task {task_run_id} will remain in active_tasks for retry")
         
-        # Clean up tracking
+        # Clean up in-memory tracking regardless
         if task_run_id in active_tasks:
             del active_tasks[task_run_id]
             
@@ -902,10 +1073,19 @@ def complete_task(task_run_id):
                 'message': 'Task already completed'
             })
         
-        # Get task metadata from session
+        # Get task metadata from session OR database
         task_metadata = session.get(f'task_{task_run_id}')
         if not task_metadata:
-            return jsonify({'error': 'Task metadata not found'}), 404
+            # Try to get from database using our session-independent function
+            db_task = check_task_exists_session_independent(task_run_id)
+            if not db_task:
+                return jsonify({'error': 'Task metadata not found'}), 404
+            # Convert database task to task_metadata format
+            task_metadata = {
+                'industry': db_task['industry'],
+                'geography': db_task['geography'], 
+                'details': db_task['details']
+            }
         
         # Mark as completed to prevent other systems from processing
         completed_tasks.add(task_run_id)
@@ -942,6 +1122,7 @@ def complete_task(task_run_id):
         session.pop(f'task_{task_run_id}', None)
         if task_run_id in active_tasks:
             del active_tasks[task_run_id]
+        # Status already updated to 'completed' by save_report function
         
         return jsonify({
             'success': True,
@@ -1009,11 +1190,192 @@ def api_status():
         'login_required': False
     })
 
-# Initialize database on import for serverless deployment
+@app.route('/api/library-html')
+def get_library_html():
+    """Get library section HTML for real-time updates"""
+    # Basic rate limiting: max 1 request per second per IP
+    client_ip = request.environ.get('HTTP_X_FORWARDED_FOR', request.environ.get('REMOTE_ADDR', 'unknown'))
+    current_time = time.time()
+    
+    if not hasattr(get_library_html, 'last_requests'):
+        get_library_html.last_requests = {}
+    
+    if client_ip in get_library_html.last_requests:
+        if current_time - get_library_html.last_requests[client_ip] < 1.0:  # 1 second
+            return jsonify({'error': 'Rate limit exceeded'}), 429
+    
+    get_library_html.last_requests[client_ip] = current_time
+    
+    try:
+        # Get all public reports and running tasks (same as index route)
+        public_reports = get_all_public_reports()
+        active_tasks_for_library = get_running_tasks()
+        
+        # Render just the library section 
+        return render_template_string('''
+        {% if public_reports or active_tasks %}
+        <div class="analyses-grid">
+            <!-- Active Tasks (Generating) -->
+            {% for task in active_tasks %}
+            <div class="analysis-card generating-card">
+                <div class="company-logo" style="background-color: #9CA3AF; opacity: 0.6;">
+                    <i class="fas fa-cogs fa-spin"></i>
+                </div>
+                
+                <div class="company-name" style="color: #6B7280;">{{ task.industry|e }} Market Research Report{% if task.geography %} - {{ task.geography|e }}{% endif %}</div>
+                <div class="company-domain" style="color: #9CA3AF;">{{ task.industry|e }}{% if task.geography %} • {{ task.geography|e }}{% endif %}</div>
+                
+                <div class="company-description" style="color: #9CA3AF;">
+                    <i class="fas fa-hourglass-half me-2"></i>AI is currently researching market trends, competitive landscape, and strategic insights for the {{ task.industry|e }} sector{% if task.geography %} in {{ task.geography|e }}{% endif %}...
+                </div>
+                
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="company-category" style="background-color: #F3F4F6; color: #6B7280; border: 1px dashed #D1D5DB;">Generating...</div>
+                    <div class="view-count" style="color: #9CA3AF;">
+                        <i class="fas fa-clock"></i>
+                        <span>Started {{ task.created_at.strftime('%I:%M %p') }}</span>
+                    </div>
+                </div>
+                
+                <div class="mt-3">
+                    <button class="btn btn-outline-secondary btn-sm w-100" disabled style="opacity: 0.5;">
+                        <i class="fas fa-hourglass-half me-2"></i>Generating Report...
+                    </button>
+                </div>
+            </div>
+            {% endfor %}
+            
+            <!-- Completed Reports -->
+            {% for report in public_reports %}
+            <div class="analysis-card">
+                <div class="company-logo" style="background-color: {{ report.company_color }};">
+                    <i class="fas fa-chart-line"></i>
+                </div>
+                
+                <div class="company-name">{{ report.industry }}</div>
+                <div class="company-domain">{{ report.slug }}</div>
+                
+                <div class="company-description">{{ report.industry }} market analysis with comprehensive competitive intelligence and strategic insights.</div>
+                
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="company-category">MARKET RESEARCH</div>
+                    <div class="view-count">
+                        <i class="fas fa-eye"></i>
+                        <span>{{ report.view_count }} views</span>
+                    </div>
+                </div>
+                
+                <div class="mt-3">
+                    <a href="/report/{{ report.slug }}" class="btn btn-primary btn-sm w-100">
+                        <i class="fas fa-eye me-2"></i>VIEW ANALYSIS
+                    </a>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <!-- Sample Analyses Cards when no reports exist -->
+        <div class="analyses-grid">
+            <div class="analysis-card">
+                <div class="company-logo" style="background-color: #4A90E2;">
+                    <i class="fas fa-layer-group"></i>
+                </div>
+                <div class="company-name">StackOne Technologies LTD</div>
+                <div class="company-domain">stackone.com</div>
+                <div class="company-description">StackOne provides API integration solutions for HR and ATS systems, offering unified access to multiple platforms.</div>
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="company-category">SAMPLE</div>
+                    <div class="view-count">
+                        <i class="fas fa-eye"></i>
+                        <span>42 views</span>
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <button class="btn btn-outline-secondary btn-sm w-100" disabled>
+                        <i class="fas fa-lock me-2"></i>Sample Analysis
+                    </button>
+                </div>
+            </div>
+            <!-- Additional sample cards... -->
+        </div>
+        {% endif %}
+        ''', public_reports=public_reports, active_tasks=active_tasks_for_library)
+        
+    except Exception as e:
+        print(f"Library HTML generation error: {e}")
+        # Return minimal fallback HTML instead of JSON error
+        return '''
+        <div class="analyses-grid">
+            <div class="analysis-card" style="opacity: 0.5;">
+                <div class="company-logo" style="background-color: #DC3545;">
+                    <i class="fas fa-exclamation-triangle"></i>
+                </div>
+                <div class="company-name">Error Loading Tasks</div>
+                <div class="company-description">Please refresh the page to try again.</div>
+            </div>
+        </div>
+        '''
+
+@app.route('/api/active-tasks')
+def get_active_tasks_api():
+    """Get active tasks for the current session"""
+    try:
+        active_tasks_list = get_running_tasks()
+        print(f"API active-tasks - found: {len(active_tasks_list)} tasks")
+        
+        # Check each task status with Parallel API
+        for task in active_tasks_list:
+            try:
+                # Try to get task result to check if completed
+                run_result = client.task_run.result(task['task_run_id'])
+                # If we get here, task is complete - save full report
+                print(f"API detected completed task {task['task_run_id']} - saving report")
+                
+                content = getattr(run_result.output, "content", "No content found.")
+                basis = getattr(run_result.output, "basis", None)
+                
+                title = f"{task['industry']} Market Research Report"
+                if task['geography'] and task['geography'] != "Not specified":
+                    title += f" - {task['geography']}"
+                
+                slug = create_slug(title)
+                
+                report_id = save_report(
+                    title, slug, 
+                    task['industry'], 
+                    task['geography'], 
+                    task['details'], 
+                    content,
+                    basis,
+                    task_run_id=task['task_run_id']
+                )
+                
+                record_report_generation()
+                print(f"API saved report {report_id} for completed task {task['task_run_id']}")
+                task['status'] = 'completed'
+            except Exception as e:
+                # Task is still running or error accessing result
+                print(f"Task {task['task_run_id']} still running or error: {e}")
+                task['status'] = 'running'
+        
+        # Filter out completed tasks
+        running_tasks = [task for task in active_tasks_list if task['status'] == 'running']
+        
+        return jsonify({
+            'success': True,
+            'active_tasks': running_tasks
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+# Verify database connection on import for serverless deployment
 try:
-    init_database()
+    verify_database_connection()
 except Exception as e:
-    print(f"Database initialization error: {e}")
+    print(f"Database connection error: {e}")
 
 if __name__ == '__main__':
     # Run the application locally

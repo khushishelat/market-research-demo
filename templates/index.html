@@ -19,6 +19,41 @@
                 <!-- Form Column -->
                 <div class="col-12" id="form-column">
                     <div class="form-section" id="form-section">
+                        <!-- Recently Completed Reports -->
+                        {% if recently_completed %}
+                        <div class="alert alert-success alert-dismissible fade show mb-4" role="alert">
+                            <div class="d-flex align-items-center">
+                                <i class="fas fa-check-circle me-3"></i>
+                                <div class="flex-grow-1">
+                                    <h6 class="alert-heading mb-1">New Research Complete!</h6>
+                                    <p class="mb-2">{{ recently_completed|length }} report(s) finished while you were away:</p>
+                                    <div class="recently-completed-list">
+                                        {% for report in recently_completed %}
+                                        <div class="d-flex align-items-center justify-content-between bg-light p-2 rounded mb-2">
+                                            <div>
+                                                <strong>{{ report.industry }}</strong>
+                                                {% if report.geography %} - {{ report.geography }}{% endif %}
+                                                <br>
+                                                <small class="text-muted">Completed: {{ report.created_at.strftime('%m/%d/%Y at %I:%M %p') }}</small>
+                                            </div>
+                                            {% if report.slug %}
+                                            <a href="/report/{{ report.slug }}" class="btn btn-sm btn-success">
+                                                <i class="fas fa-eye me-1"></i>View Report
+                                            </a>
+                                            {% else %}
+                                            <span class="btn btn-sm btn-secondary disabled">
+                                                <i class="fas fa-exclamation-triangle me-1"></i>Report Incomplete
+                                            </span>
+                                            {% endif %}
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                            </div>
+                        </div>
+                        {% endif %}
+
                         <form id="research-form" class="research-form">
                             <!-- Industry and Geography Row -->
                             <div class="row mb-4">
@@ -60,7 +95,7 @@
                                 <label for="email" class="form-label stat-label">Email</label>
                                 <input type="email" class="form-control form-control-lg" id="email" 
                                        placeholder="your.email@example.com">
-                                <small class="text-muted">Optional, for receiving a notification when the report completes.</small>
+                                <small class="text-muted">Optional. We'll email you when your research completes (you can safely close this tab).</small>
                             </div>
 
                             <!-- Submit Button -->
@@ -68,7 +103,7 @@
                                 <button type="submit" class="btn btn-primary btn-lg" id="generate-btn" 
                                         {% if recent_report_count >= max_reports_per_hour %}disabled{% endif %}>
                                     <i class="fas fa-rocket me-2"></i>
-                                    <span class="btn-text">Start Deep Research</span>
+                                    <span class="btn-text">Launch AI Research</span>
                                     <span class="spinner-border spinner-border-sm ms-2 d-none" role="status"></span>
                                 </button>
                                 {% if recent_report_count >= max_reports_per_hour %}
@@ -150,8 +185,39 @@
         <h2 class="section-title">Library</h2>
         <p class="library-subtitle">Explore recently generated market research reports</p>
         
-        {% if public_reports %}
+        {% if public_reports or active_tasks %}
         <div class="analyses-grid">
+            <!-- Active Tasks (Generating) -->
+            {% for task in active_tasks %}
+            <div class="analysis-card generating-card">
+                <div class="company-logo" style="background-color: #9CA3AF; opacity: 0.6;">
+                    <i class="fas fa-cogs fa-spin"></i>
+                </div>
+                
+                <div class="company-name" style="color: #6B7280;">{{ task.industry }} Market Research Report{% if task.geography %} - {{ task.geography }}{% endif %}</div>
+                <div class="company-domain" style="color: #9CA3AF;">{{ task.industry }}{% if task.geography %} • {{ task.geography }}{% endif %}</div>
+                
+                <div class="company-description" style="color: #9CA3AF;">
+                    <i class="fas fa-hourglass-half me-2"></i>AI is currently researching market trends, competitive landscape, and strategic insights for the {{ task.industry }} sector{% if task.geography %} in {{ task.geography }}{% endif %}...
+                </div>
+                
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="company-category" style="background-color: #F3F4F6; color: #6B7280; border: 1px dashed #D1D5DB;">Generating...</div>
+                    <div class="view-count" style="color: #9CA3AF;">
+                        <i class="fas fa-clock"></i>
+                        <span>Started {{ task.created_at.strftime('%I:%M %p') }}</span>
+                    </div>
+                </div>
+                
+                <div class="mt-3">
+                    <button class="btn btn-outline-secondary btn-sm w-100" disabled style="opacity: 0.5;">
+                        <i class="fas fa-spinner fa-spin me-1"></i>Generating Report...
+                    </button>
+                </div>
+            </div>
+            {% endfor %}
+            
+            <!-- Completed Reports -->
             {% for report in public_reports[:6] %}
             <div class="analysis-card">
                 <!-- Company Logo Placeholder -->
@@ -160,7 +226,7 @@
                 </div>
                 
                 <div class="company-name">{{ report.industry[:30] }}{% if report.industry|length > 30 %}...{% endif %}</div>
-                <div class="company-domain">{{ report.slug[:25] }}{% if report.slug|length > 25 %}...{% endif %}</div>
+                <div class="company-domain">{% if report.slug %}{{ report.slug[:25] }}{% if report.slug|length > 25 %}...{% endif %}{% else %}No URL{% endif %}</div>
                 
                 <div class="company-description">
                     {% if report.industry %}
@@ -179,10 +245,16 @@
                 </div>
                 
                 <div class="mt-3">
+                    {% if report.slug %}
                     <a href="{{ url_for('view_report', slug=report.slug) }}" 
                        class="btn btn-outline-primary btn-sm w-100">
                         <i class="fas fa-eye me-1"></i>View Analysis
                     </a>
+                    {% else %}
+                    <span class="btn btn-secondary btn-sm w-100 disabled">
+                        <i class="fas fa-exclamation-triangle me-1"></i>Report Incomplete
+                    </span>
+                    {% endif %}
                 </div>
             </div>
             {% endfor %}

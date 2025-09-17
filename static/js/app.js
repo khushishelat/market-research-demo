@@ -16,6 +16,8 @@ const App = {
         this.updateUserStatus();
         this.setupFormValidation();
         this.addAnimations();
+        this.checkForActiveTasksOnLoad();
+        this.setupWindowCleanup();
     },
     
     // Set up event listeners
@@ -149,6 +151,8 @@ const App = {
         
         // If we get a task_run_id, start SSE streaming
         if (result.task_run_id) {
+            // Start polling for library updates (database-driven)
+            this.startLibraryPolling();
             this.startTaskStream(result.task_run_id);
             return { streaming: true, task_run_id: result.task_run_id };
         }
@@ -186,7 +190,7 @@ const App = {
         } else {
             generateBtn.disabled = false;
             spinner?.classList.add('d-none');
-            if (btnText) btnText.textContent = 'Launch AI-Powered Deep Research';
+            if (btnText) btnText.textContent = 'Launch AI Research';
             
             // Remove submitting class and re-enable form inputs
             if (form) {
@@ -219,7 +223,10 @@ const App = {
     },
     
     // Show success modal
-    showSuccessModal(response) {
+    showSuccessModal(result) {
+        // Update library immediately when task completes
+        this.updateLibraryFromDatabase();
+        
         // Mark task as complete to stop all background monitoring
         this.isTaskComplete = true;
         
@@ -252,8 +259,8 @@ const App = {
             sseFeedContainer.classList.add('d-none');
         }
         
-        if (sseCompletion && viewReportBtn) {
-            viewReportBtn.href = response.url;
+        if (sseCompletion && viewReportBtn && result.url) {
+            viewReportBtn.href = result.url;
             sseCompletion.classList.remove('d-none');
         }
         
@@ -262,15 +269,15 @@ const App = {
         
         // Set up modal as fallback but don't show it immediately
         const reportLinks = document.getElementById('report-links');
-        if (reportLinks) {
+        if (reportLinks && result.url && result.slug) {
             reportLinks.innerHTML = `
-                <a href="${response.url}" class="btn btn-primary">
+                <a href="${result.url}" class="btn btn-primary">
                     <i class="fas fa-eye me-2"></i>View Report
                 </a>
-                <a href="/download/${response.slug}" class="btn btn-outline-secondary">
+                <a href="/download/${result.slug}" class="btn btn-outline-secondary">
                     <i class="fas fa-download me-2"></i>Download Markdown
                 </a>
-                <button class="btn btn-outline-info" onclick="App.copyToClipboard('${window.location.origin}${response.url}')">
+                <button class="btn btn-outline-info" onclick="App.copyToClipboard('${window.location.origin}${result.url}')">
                     <i class="fas fa-share me-2"></i>Copy Share Link
                 </button>
             `;
@@ -1057,6 +1064,158 @@ const App = {
         
         // Use new cleanup method
         this.cleanupConnections();
+        
+        // Stop library polling
+        this.stopLibraryPolling();
+    },
+
+    // Setup cleanup on window/tab close
+    setupWindowCleanup() {
+        // Clean up when page is hidden or user leaves
+        const cleanup = () => {
+            this.cleanup();
+        };
+
+        window.addEventListener('beforeunload', cleanup);
+        window.addEventListener('pagehide', cleanup);
+        
+        // Handle page visibility change (tab switching)
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                // Page is hidden, reduce polling frequency or pause
+                if (this.libraryPollingInterval) {
+                    clearInterval(this.libraryPollingInterval);
+                    // Restart with longer interval when hidden
+                    this.libraryPollingInterval = setInterval(async () => {
+                        try {
+                            await this.updateLibraryFromDatabase();
+                            this.libraryPollingErrors = 0;
+                        } catch (error) {
+                            console.error('Background polling error:', error);
+                        }
+                    }, 30000); // 30 seconds when hidden
+                }
+            } else {
+                // Page is visible, restore normal polling
+                if (this.libraryPollingInterval) {
+                    this.stopLibraryPolling();
+                    this.startLibraryPolling();
+                }
+            }
+        });
+    },
+
+    // Start polling for library updates (database-driven approach)
+    startLibraryPolling() {
+        // Don't start multiple polling intervals
+        if (this.libraryPollingInterval) {
+            return;
+        }
+        
+        console.log('Starting library polling');
+        
+        // Poll every 5 seconds (production-optimized)
+        this.libraryPollingInterval = setInterval(async () => {
+            try {
+                await this.updateLibraryFromDatabase();
+                // Reset error count on success
+                this.libraryPollingErrors = 0;
+            } catch (error) {
+                console.error('Library polling error:', error);
+                this.libraryPollingErrors = (this.libraryPollingErrors || 0) + 1;
+                
+                // Stop polling after 3 consecutive failures
+                if (this.libraryPollingErrors >= 3) {
+                    console.error('Library polling: Too many errors, stopping');
+                    this.stopLibraryPolling();
+                }
+            }
+        }, 5000);
+        
+        // Update after a short delay to avoid race condition with database save
+        setTimeout(() => {
+            this.updateLibraryFromDatabase();
+        }, 1000);
+    },
+
+    // Stop library polling when no active tasks
+    stopLibraryPolling() {
+        if (this.libraryPollingInterval) {
+            clearInterval(this.libraryPollingInterval);
+            this.libraryPollingInterval = null;
+            this.libraryPollingErrors = 0; // Reset error count
+            console.log('Stopped library polling');
+        }
+    },
+
+    // Update library section from database
+    async updateLibraryFromDatabase() {
+        try {
+            const response = await fetch('/api/library-html');
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
+            const html = await response.text();
+            // Find the analyses-grid container and replace its content
+            const analysesGrid = document.querySelector('.analyses-grid');
+            if (analysesGrid && analysesGrid.parentNode) {
+                // Replace the entire analyses-grid with the new one
+                analysesGrid.outerHTML = html;
+                
+                // Check if there are any generating cards left
+                const generatingCards = document.querySelectorAll('.generating-card');
+                if (generatingCards.length === 0) {
+                    // No more active tasks, stop polling
+                    this.stopLibraryPolling();
+                }
+            } else {
+                console.error('Library update - could not find .analyses-grid');
+            }
+        } catch (error) {
+            console.error('Failed to update library:', error);
+        }
+    },
+
+    // Check for completed research reports on page load
+    async checkForActiveTasksOnLoad() {
+        try {
+            const response = await fetch('/api/active-tasks');
+            const result = await response.json();
+            
+            if (result.success && result.active_tasks && result.active_tasks.length > 0) {
+                // Show background processing notification
+                this.showBackgroundProcessingUI(result.active_tasks);
+            }
+        } catch (error) {
+            console.log('No active tasks found or error checking:', error);
+        }
+    },
+    
+    // Show subtle notification about background processing
+    showBackgroundProcessingUI(activeTasks) {
+        // Create a subtle background processing notification
+        const processingHTML = `
+            <div class="alert alert-success alert-dismissible fade show mb-4" role="alert">
+                <div class="d-flex align-items-center">
+                    <i class="fas fa-cogs fa-spin me-3"></i>
+                    <div class="flex-grow-1">
+                        <h6 class="alert-heading mb-1">Research In Progress</h6>
+                        <p class="mb-1">You have ${activeTasks.length} research task(s) running in the background.</p>
+                        <small class="text-muted">
+                            Your reports will appear in the library below when complete. You can safely close this tab.
+                        </small>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            </div>
+        `;
+        
+        // Insert at the top of the form section
+        const formSection = document.getElementById('form-section');
+        if (formSection) {
+            formSection.insertAdjacentHTML('afterbegin', processingHTML);
+        }
     }
 };
 
