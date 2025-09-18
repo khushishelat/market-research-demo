@@ -268,6 +268,30 @@ def save_report(title, slug, industry, geography, details, content, basis=None, 
         print(f"⚠️  Invalid slug detected: {repr(slug)}, creating fallback")
         slug = f"market-report-{task_run_id[-12:] if task_run_id else 'unknown'}"
     
+    # Clean content to prevent PostgreSQL errors
+    if content and isinstance(content, str):
+        original_length = len(content)
+        # Remove NULL characters and other problematic characters
+        content = content.replace('\x00', '')  # Remove NULL bytes
+        content = content.replace('\uffff', '')  # Remove Unicode replacement characters
+        cleaned_length = len(content)
+        
+        if original_length != cleaned_length:
+            removed_chars = original_length - cleaned_length
+            print(f"🧹 Cleaned content: removed {removed_chars} problematic character(s)")
+    
+    # Clean other string fields as well
+    if title and isinstance(title, str):
+        title = title.replace('\x00', '').replace('\uffff', '')
+    if slug and isinstance(slug, str):
+        slug = slug.replace('\x00', '').replace('\uffff', '')
+    if industry and isinstance(industry, str):
+        industry = industry.replace('\x00', '').replace('\uffff', '')
+    if geography and isinstance(geography, str):
+        geography = geography.replace('\x00', '').replace('\uffff', '')
+    if details and isinstance(details, str):
+        details = details.replace('\x00', '').replace('\uffff', '')
+    
     print(f"💾 Saving report: title='{title}', slug='{slug}', task_run_id='{task_run_id}'")
     
     conn = get_db_connection()
@@ -290,6 +314,9 @@ def save_report(title, slug, industry, geography, details, content, basis=None, 
             try:
                 basis_dict = convert_basis_to_dict(basis)
                 basis_json = json.dumps(basis_dict) if basis_dict else None
+                # Clean basis JSON as well
+                if basis_json and isinstance(basis_json, str):
+                    basis_json = basis_json.replace('\x00', '').replace('\uffff', '')
             except Exception as e:
                 print(f"Error converting basis to JSON: {e}")
                 basis_json = None
