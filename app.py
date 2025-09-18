@@ -155,7 +155,7 @@ def send_report_ready_email(email, report_title, report_slug, task_id):
         
         # Prepare email data
         email_data = {
-            "from": "Acme <updates@aimarketresearch.app>",
+            "from": "Market Research <updates@aimarketresearch.app>",
             "to": [email],
             "subject": "Market Research report is now available",
             "html": html_content,
