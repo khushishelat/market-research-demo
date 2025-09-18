@@ -1268,8 +1268,8 @@ const App = {
             const result = await response.json();
             
             if (result.success && result.active_tasks && result.active_tasks.length > 0) {
-                // Show background processing notification
-                this.showBackgroundProcessingUI(result.active_tasks);
+                // Background processing notification disabled per user request
+                // this.showBackgroundProcessingUI(result.active_tasks);
             }
         } catch (error) {
             console.log('No active tasks found or error checking:', error);
