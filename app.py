@@ -627,13 +627,71 @@ def get_running_tasks():
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # Clean up old orphaned running tasks (older than 4 hours)
+    # Check for old running or failed tasks and verify their actual status with Parallel API
     four_hours_ago = datetime.datetime.now() - datetime.timedelta(hours=4)
+    
+    # Find old running or failed tasks that might need status verification
     cursor.execute('''
-        UPDATE reports 
-        SET status = 'failed', error_message = 'Task timed out', completed_at = CURRENT_TIMESTAMP
-        WHERE status = 'running' AND created_at < %s
+        SELECT task_run_id, industry, geography, details, created_at, status
+        FROM reports 
+        WHERE (status = 'running' OR status = 'failed') AND created_at < %s
     ''', (four_hours_ago,))
+    old_tasks = cursor.fetchall()
+    
+    if old_tasks:
+        print(f"🔍 Found {len(old_tasks)} old running/failed tasks, checking actual status...")
+        for task in old_tasks:
+            task_run_id = task['task_run_id']
+            print(f"   - Checking task {task_run_id}: {task['industry']} (status: {task['status']}, started {task['created_at']})")
+            
+            # Check actual task status with Parallel API
+            try:
+                run_result = client.task_run.result(task_run_id)
+                # If we get here, task is complete - save the report
+                print(f"   ✅ Task {task_run_id} actually completed, saving report...")
+                
+                content = getattr(run_result.output, "content", "No content found.")
+                basis = getattr(run_result.output, "basis", None)
+                
+                # Create title and slug
+                title = f"{task['industry']} Market Research Report"
+                if task['geography'] and task['geography'] != "Not specified":
+                    title += f" - {task['geography']}"
+                
+                slug = create_slug(title)
+                
+                # Save the completed report
+                report_id = save_report(
+                    title, slug,
+                    task['industry'],
+                    task['geography'], 
+                    task['details'],
+                    content,
+                    basis,
+                    task_run_id=task_run_id
+                )
+                
+                record_report_generation()
+                print(f"   ✅ Saved report {report_id} for task {task_run_id}")
+                
+            except Exception as e:
+                # Task is still running, queued, or failed - check the actual error
+                error_str = str(e).lower()
+                if 'not found' in error_str or 'invalid' in error_str:
+                    # Task doesn't exist in Parallel API - might be a database inconsistency
+                    print(f"   ❌ Task {task_run_id} not found in Parallel API - marking as failed")
+                    cursor.execute('''
+                        UPDATE reports 
+                        SET status = 'failed', error_message = 'Task not found in Parallel API', completed_at = CURRENT_TIMESTAMP
+                        WHERE task_run_id = %s
+                    ''', (task_run_id,))
+                else:
+                    # Task exists but still processing (queued/running) - leave it alone
+                    print(f"   ⏳ Task {task_run_id} still processing in Parallel API: {e}")
+                    # Don't mark as timed out - let it continue
+    
+    # Check for failed tasks that might need retry (separate from the recovery above)
+    retry_failed_tasks()
     
     # Get all running tasks
     cursor.execute('''
@@ -656,6 +714,70 @@ def get_running_tasks():
         'details': row['details'],
         'created_at': row['created_at']
     } for row in results]
+
+def retry_failed_tasks():
+    """Check for failed tasks and retry them if they failed due to recoverable errors"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Find tasks that failed due to recoverable errors (not too old)
+    cursor.execute('''
+        SELECT task_run_id, industry, geography, details, error_message, created_at
+        FROM reports 
+        WHERE status = 'failed' 
+        AND error_message IS NOT NULL
+        AND (
+            error_message ILIKE '%timeout%' OR 
+            error_message ILIKE '%connection%' OR 
+            error_message ILIKE '%network%' OR 
+            error_message ILIKE '%server error%' OR
+            error_message ILIKE '%Task timed out%'
+        )
+        AND created_at > NOW() - INTERVAL '24 hours'  -- Only retry recent failures
+        AND created_at < NOW() - INTERVAL '1 hour'    -- But not too recent (give them time)
+    ''')
+    
+    failed_tasks = cursor.fetchall()
+    
+    if failed_tasks:
+        print(f"🔄 Found {len(failed_tasks)} failed tasks with recoverable errors, retrying...")
+        for task in failed_tasks:
+            task_run_id = task['task_run_id']
+            print(f"   - Retrying task {task_run_id}: {task['industry']} (failed: {task['error_message']})")
+            
+            # Reset task status to running for retry
+            cursor.execute('''
+                UPDATE reports 
+                SET status = 'running', error_message = NULL, completed_at = NULL
+                WHERE task_run_id = %s
+            ''', (task_run_id,))
+            
+            # Start background monitoring for the retry
+            task_metadata = {
+                'industry': task['industry'],
+                'geography': task['geography'],
+                'details': task['details']
+            }
+            
+            monitor_thread = threading.Thread(
+                target=monitor_task_completion,
+                args=(task_run_id, task_metadata),
+                daemon=True
+            )
+            monitor_thread.start()
+            
+            # Track active task
+            active_tasks[task_run_id] = {
+                'metadata': task_metadata,
+                'thread': monitor_thread,
+                'start_time': datetime.datetime.now()
+            }
+            
+            print(f"   ✅ Restarted monitoring for task {task_run_id}")
+    
+    conn.commit()
+    cursor.close()
+    conn.close()
 
 def update_task_status(task_run_id, status, error_message=None):
     """Update task status in unified reports table"""
